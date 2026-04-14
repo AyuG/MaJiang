@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Docker volumes
+redis-data/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

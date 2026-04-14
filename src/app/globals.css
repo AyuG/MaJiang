@@ -1,0 +1,558 @@
+/* Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace, sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  min-height: 100vh;
+}
+
+/* Lobby */
+.lobby {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 1rem;
+}
+
+.lobby h2 {
+  font-size: 2rem;
+  color: #ffd700;
+}
+
+.connection-status {
+  font-size: 0.9rem;
+}
+
+.lobby-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.join-section {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.room-input {
+  padding: 0.5rem;
+  font-size: 1rem;
+  background: #16213e;
+  border: 1px solid #444;
+  color: #e0e0e0;
+  text-align: center;
+  width: 10rem;
+}
+
+.lobby-btn {
+  padding: 0.5rem 1.5rem;
+  font-size: 1rem;
+  background: #0f3460;
+  color: #e0e0e0;
+  border: 1px solid #555;
+  cursor: pointer;
+}
+
+.lobby-btn:hover:not(:disabled) {
+  background: #1a5276;
+}
+
+.lobby-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.room-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.2rem;
+}
+
+/* Game Board */
+.game-board {
+  display: grid;
+  grid-template-areas:
+    ".    top    ."
+    "left center right"
+    ".    bottom .";
+  grid-template-columns: 1fr 2fr 1fr;
+  grid-template-rows: auto 1fr auto;
+  flex: 1;
+  padding: 0.5rem;
+  gap: 0.5rem;
+  overflow-y: auto;
+}
+
+.board-top    { grid-area: top; }
+.board-left   { grid-area: left; }
+.board-right  { grid-area: right; }
+.board-bottom { grid-area: bottom; }
+.board-center { grid-area: center; }
+
+/* Player Area */
+.player-area {
+  border: 1px solid #333;
+  padding: 0.5rem;
+  background: #16213e;
+}
+
+.player-self {
+  border-color: #ffd700;
+}
+
+.player-info {
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.hand-hidden {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+/* Hand Display */
+.hand-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 0.25rem 0;
+}
+
+.tile-btn {
+  font-family: monospace, 'Noto Sans SC', sans-serif;
+  font-size: 0.9rem;
+  padding: 0.2rem 0.3rem;
+  background: #2c3e50;
+  color: #e0e0e0;
+  border: 1px solid #555;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tile-btn:hover {
+  background: #3d566e;
+}
+
+.tile-last-drawn {
+  border-color: #ffd700;
+  color: #ffd700;
+}
+
+/* Bounce + flash animation for newly drawn tile */
+.tile-bounce {
+  animation: tileBounce 1.5s ease-in-out 3;
+}
+
+@keyframes tileBounce {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  25% { transform: translateY(-6px); opacity: 0.7; }
+  50% { transform: translateY(0); opacity: 1; }
+  75% { transform: translateY(-3px); opacity: 0.8; }
+}
+
+/* Discard Pool */
+.discard-pool {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-top: 0.25rem;
+  line-height: 1.6;
+}
+
+.discard-latest {
+  color: #ff6b6b;
+  font-weight: bold;
+}
+
+/* Meld Display */
+.meld-display {
+  font-size: 0.85rem;
+  color: #7ec8e3;
+  margin: 0.15rem 0;
+}
+
+.meld-item {
+  margin-right: 0.5rem;
+}
+
+/* Action Bar — above hand, inside board-bottom */
+.action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  background: #0f3460;
+  border: 1px solid #444;
+  border-radius: 4px;
+  margin-bottom: 0.25rem;
+}
+
+.timer {
+  font-size: 1rem;
+  color: #ffd700;
+}
+
+.action-btn {
+  padding: 0.5rem 1.5rem;
+  font-size: 1.1rem;
+  background: #2c3e50;
+  color: #e0e0e0;
+  border: 1px solid #555;
+  cursor: pointer;
+}
+
+.action-divider {
+  color: #555;
+  font-size: 0.9rem;
+}
+
+.action-btn:hover {
+  background: #3d566e;
+}
+
+.action-hu {
+  background: #8b0000;
+  border-color: #ff4444;
+  color: #ffd700;
+}
+
+.action-hu:hover {
+  background: #a00000;
+}
+
+.dissolve-btn {
+  margin-top: 0.5rem;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8rem;
+  background: #333;
+  color: #aaa;
+  border: 1px solid #555;
+  cursor: pointer;
+}
+
+.dissolve-btn:hover {
+  background: #444;
+}
+
+/* Pause Overlay */
+.pause-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.pause-content {
+  text-align: center;
+  color: #ffd700;
+}
+
+.pause-content h2 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.pause-content p {
+  font-size: 1.2rem;
+  color: #e0e0e0;
+  margin-bottom: 1rem;
+}
+
+.disconnected-player {
+  font-size: 1rem;
+  color: #ff6b6b;
+  margin: 0.25rem 0;
+}
+
+/* Player list in lobby */
+.room-id-display {
+  font-size: 1.4rem;
+  color: #ffd700;
+  margin-bottom: 0.5rem;
+}
+
+.player-list {
+  background: #16213e;
+  border: 1px solid #333;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  min-width: 250px;
+}
+
+.player-list-title {
+  font-size: 1rem;
+  color: #7ec8e3;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid #333;
+  padding-bottom: 0.25rem;
+}
+
+.player-slot {
+  padding: 0.3rem 0;
+  font-size: 0.95rem;
+}
+
+.player-slot-self {
+  color: #ffd700;
+}
+
+.empty-slot {
+  color: #555;
+}
+
+.waiting-hint {
+  color: #888;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+/* Kick button */
+.kick-btn {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.75rem;
+  background: #8b0000;
+  color: #e0e0e0;
+  border: 1px solid #ff4444;
+  cursor: pointer;
+}
+
+.kick-btn:hover {
+  background: #a00000;
+}
+
+/* Lobby button group */
+.lobby-btn-group {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.unready-btn {
+  background: #555;
+}
+
+.unready-btn:hover {
+  background: #666;
+}
+
+.dissolve-owner-btn {
+  background: #8b0000;
+  border-color: #ff4444;
+}
+
+.dissolve-owner-btn:hover {
+  background: #a00000;
+}
+
+/* Current player highlight */
+.player-current {
+  border-color: #4caf50 !important;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.4);
+}
+
+.current-marker {
+  color: #4caf50;
+  font-weight: bold;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Start game button */
+.start-btn {
+  background: #2e7d32 !important;
+  border-color: #4caf50 !important;
+  color: #fff !important;
+  font-weight: bold;
+}
+
+.start-btn:hover {
+  background: #388e3c !important;
+}
+
+/* Game layout with header */
+.game-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.game-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 0.5rem 1rem;
+  background: #0f3460;
+  border-bottom: 1px solid #444;
+  font-size: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.current-turn-header {
+  color: #4caf50;
+  font-weight: bold;
+}
+
+.autopilot-indicator {
+  color: #ff9800;
+  font-weight: bold;
+}
+
+.autopilot-badge {
+  color: #ff9800;
+  font-size: 0.8rem;
+}
+
+/* Vote dialog */
+.vote-dialog {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 90;
+}
+
+.vote-content {
+  background: #16213e;
+  border: 1px solid #ffd700;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.vote-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+/* Player discard area near their player area */
+.player-discard-area {
+  padding: 0.25rem 0.5rem;
+  min-height: 1.5rem;
+}
+
+/* Room code in header */
+.room-code {
+  color: #ffd700;
+  font-weight: bold;
+}
+
+/* Center area minimal */
+.board-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* Dice overlay */
+.dice-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 95;
+}
+
+.dice-content {
+  text-align: center;
+  color: #ffd700;
+}
+
+.dice-content h2 {
+  font-size: 1.8rem;
+  margin-bottom: 1rem;
+}
+
+.dice-rolls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 1.2rem;
+}
+
+.dice-player {
+  padding: 0.4rem 1rem;
+  background: #16213e;
+  border: 1px solid #333;
+  color: #e0e0e0;
+}
+
+.dice-winner {
+  border-color: #ffd700;
+  color: #ffd700;
+  font-weight: bold;
+  animation: tileBounce 1s ease-in-out 2;
+}
+
+/* Score Panel — left bottom */
+.score-panel {
+  position: fixed;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 50;
+  background: rgba(22, 33, 62, 0.92);
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  max-width: 320px;
+  max-height: 30vh;
+  overflow-y: auto;
+  font-size: 0.75rem;
+}
+
+.score-panel-title {
+  color: #7ec8e3;
+  font-size: 0.8rem;
+  margin-bottom: 0.3rem;
+  border-bottom: 1px solid #333;
+  padding-bottom: 0.2rem;
+}
+
+.score-log-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.15rem 0;
+  border-bottom: 1px solid #222;
+}
+
+.score-log-round {
+  color: #ffd700;
+  font-weight: bold;
+}
+
+.score-log-result {
+  color: #888;
+}
+
+.score-log-delta {
+  font-size: 0.7rem;
+}
