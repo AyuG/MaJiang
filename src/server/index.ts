@@ -35,7 +35,9 @@ app.prepare().then(async () => {
   // Recover active games on startup
   await recoverActiveGames(redisStore, roomManager);
 
-  httpServer.listen(port, () => {
-    console.log(`> Ready on http://localhost:${port}`);
+  const hostname = process.env.HOSTNAME || '0.0.0.0';
+
+  httpServer.listen(port, hostname, () => {
+    console.log(`> Ready on http://${hostname}:${port}`);
   });
 });
