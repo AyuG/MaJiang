@@ -13,6 +13,8 @@ export default function Home() {
   const {
     socket,
     isConnected,
+    playerId,
+    nickname,
     gameState,
     roomId,
     availableActions,
@@ -48,6 +50,18 @@ export default function Home() {
   const [roomSync, setRoomSync] = useState<RoomSyncData | null>(null);
   const [voteInitiator, setVoteInitiator] = useState<string | null>(null);
   const [roomError, setRoomError] = useState<string | null>(null);
+
+  // Auto-join from invite link (?room=XXXXXX)
+  useEffect(() => {
+    if (!isConnected || localRoomId || roomId) return;
+    const params = new URLSearchParams(window.location.search);
+    const inviteRoom = params.get('room');
+    if (inviteRoom && inviteRoom.length === 6) {
+      joinRoom(inviteRoom);
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [isConnected, localRoomId, roomId, joinRoom]);
 
   useEffect(() => {
     if (!socket) return;
@@ -110,7 +124,7 @@ export default function Home() {
   const effectiveRoomId = roomId || localRoomId;
   const inGame = gameState && (gameState.phase === 'TURN' || gameState.phase === 'AWAITING');
   const gameOver = gameState && (gameState.phase === 'WIN' || gameState.phase === 'DRAW');
-  const myPlayerId = socket?.id || '';
+  const myPlayerId = playerId;
 
   if (gameOver && gameState) {
     // Derive score info from gameState players
@@ -202,6 +216,7 @@ export default function Home() {
         roomId={effectiveRoomId}
         roomSync={roomSync}
         myId={myPlayerId}
+        myNickname={nickname}
         roomError={roomError}
         onCreateRoom={createRoom}
         onJoinRoom={handleJoinRoom}

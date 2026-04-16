@@ -38,7 +38,7 @@ export interface GameStateHook {
   scoreLog: ScoreLogEntry[];
 }
 
-export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null): GameStateHook {
+export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, persistentPlayerId?: string): GameStateHook {
   const [gameState, setGameState] = useState<ClientGameState | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
@@ -195,7 +195,7 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null):
   let timerDuration = 0;
 
   if (gameState && socket) {
-    const myId = socket.id;
+    const myId = persistentPlayerId || socket.id;
     const myIndex = gameState.players.findIndex((p) => p.id === myId);
 
     if (gameState.phase === 'TURN' && gameState.currentPlayerIndex === myIndex) {

@@ -11,7 +11,7 @@ import { PauseOverlay } from '@/components/PauseOverlay';
  */
 export default function GamePage() {
   const {
-    socket,
+    playerId,
     gameState,
     availableActions,
     gangOptions,
@@ -24,7 +24,7 @@ export default function GamePage() {
     voteDissolve,
   } = useMahjongSocket();
 
-  const myPlayerId = socket?.id || '';
+  const myPlayerId = playerId;
 
   if (!gameState) {
     return (

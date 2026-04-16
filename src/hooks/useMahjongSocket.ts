@@ -5,9 +5,9 @@ import { useSocket } from './useSocket';
 import { useGameState } from './useGameState';
 
 export function useMahjongSocket() {
-  const { socket, isConnected } = useSocket();
+  const { socket, isConnected, playerId, nickname } = useSocket();
   const { gameState, roomId, availableActions, gangOptions, remainingSeconds, winResult, isDraw, diceResult, scoreLog } =
-    useGameState(socket);
+    useGameState(socket, playerId);
 
   const createRoom = useCallback(() => {
     socket?.emit('room:create');
@@ -92,6 +92,8 @@ export function useMahjongSocket() {
   return {
     socket,
     isConnected,
+    playerId,
+    nickname,
     gameState,
     roomId,
     availableActions,

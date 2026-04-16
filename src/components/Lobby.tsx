@@ -8,6 +8,7 @@ interface LobbyProps {
   roomId: string | null;
   roomSync: RoomSyncData | null;
   myId: string;
+  myNickname: string;
   roomError?: string | null;
   onCreateRoom: () => void;
   onJoinRoom: (roomId: string) => void;
@@ -24,10 +25,11 @@ const SEAT_LABELS: Record<string, string> = {
 };
 
 export function Lobby({
-  isConnected, roomId, roomSync, myId, roomError,
+  isConnected, roomId, roomSync, myId, myNickname, roomError,
   onCreateRoom, onJoinRoom, onReady, onUnready, onKick, onDissolve, onStart, onLeaveRoom,
 }: LobbyProps) {
   const [inputRoomId, setInputRoomId] = useState('');
+  const [copied, setCopied] = useState(false);
 
   // Room ID: 6 chars, uppercase A-Z (no I/O) + 2-9
   const ROOM_ID_REGEX = /^[A-HJKLMNP-Z2-9]{0,6}$/;
@@ -48,6 +50,7 @@ export function Lobby({
       <h2>大厅</h2>
       <div className="connection-status">
         {isConnected ? '🟢 已连接' : '🔴 未连接'}
+        {myNickname && <span style={{ marginLeft: '.5rem', color: '#e8b339' }}>{myNickname}</span>}
       </div>
 
       {!roomId ? (
@@ -63,7 +66,16 @@ export function Lobby({
         </div>
       ) : (
         <div className="room-info">
-          <div className="room-id-display">房间号: {roomId}</div>
+          <div className="room-id-display">
+            房间号: {roomId}
+            <button className="lobby-btn" style={{ marginLeft: '.5rem', fontSize: '.7rem', padding: '.15rem .4rem' }}
+              onClick={() => {
+                const url = `${window.location.origin}?room=${roomId}`;
+                navigator.clipboard.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+              }}>
+              {copied ? '✅ 已复制' : '📋 邀请链接'}
+            </button>
+          </div>
           <div className="player-list">
             <div className="player-list-title">玩家 ({roomSync?.players.length ?? 0}/4)</div>
             {[0, 1, 2, 3].map((i) => {

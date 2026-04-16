@@ -158,8 +158,9 @@ export function setupSocketHandlers(
 
   io.on('connection', (socket: Socket<ClientEvents, ServerEvents>) => {
 
-    // Extract persistent player ID from auth handshake (falls back to socket.id)
+    // Extract persistent player ID and nickname from auth handshake
     const persistentId = (socket.handshake.auth as any)?.playerId || socket.id;
+    const persistentNickname = (socket.handshake.auth as any)?.nickname || persistentId.slice(0, 8);
 
     // ── Room: create ─────────────────────────────────
     socket.on('room:create', () => {
