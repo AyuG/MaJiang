@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { ClientGameState } from '@/types';
-import type { Tile as TileType } from '@/types';
+import type { ClientGameState, Tile as TileType, Meld } from '@/types';
 import { Tile } from './Tile';
 import { MeldDisplay } from './MeldDisplay';
 import { audioService } from '@/services/audioService';
@@ -41,31 +40,21 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
     }
   };
 
-  const renderPlayerCard = (idx: number, position: 'top' | 'left' | 'right') => {
+  const statusIcon = (idx: number) => {
     const p = gameState.players[idx];
-    const isCurrent = idx === currentIdx;
-    const isAuto = autoPlayers.includes(p.id);
-    const isDealer = idx === gameState.dealerIndex;
-    return (
-      <div className={`player-card player-${position}${isCurrent ? ' player-active' : ''}`}>
-        <div className="pc-info">
-          <span className="pc-seat">{SEATS[idx]}{isDealer ? '庄' : ''}</span>
-          <span className="pc-score">{p.score}</span>
-          {!p.isConnected && <span className="pc-icon">🔴</span>}
-          {isAuto && <span className="pc-icon">🤖</span>}
-          {isCurrent && <span className="pc-icon blink">🕒</span>}
-        </div>
-        <div className="pc-hand">{p.handCount}张</div>
-        <MeldDisplay melds={p.melds} />
-      </div>
-    );
+    const icons: string[] = [];
+    if (!p.isConnected) icons.push('🔴');
+    if (autoPlayers.includes(p.id)) icons.push('🤖');
+    if (idx === currentIdx) icons.push('🕒');
+    if (idx === gameState.dealerIndex) icons.push('庄');
+    return icons.join('');
   };
 
-  const renderRiver = (idx: number) => {
+  const renderRiver = (idx: number, cls: string) => {
     const tiles = gameState.players[idx].discardPool;
-    if (tiles.length === 0) return null;
+    if (tiles.length === 0) return <div className={`river ${cls}`} />;
     return (
-      <div className="river">
+      <div className={`river ${cls}`}>
         {tiles.map((t, i) => (
           <Tile key={t.id} tile={t} size="sm"
             isLastDrawn={i === tiles.length - 1 && gameState.lastDiscard?.playerIndex === idx} />
@@ -75,75 +64,95 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
   };
 
   const selfPlayer = gameState.players[selfIdx];
-  const isMyCurrent = selfIdx === currentIdx;
+
+  const sortedHand = [...gameState.myHand].sort((a, b) => {
+    const so: Record<string, number> = { wan: 0, tiao: 1, tong: 2, feng: 3, zi: 4 };
+    const sd = (so[a.suit] ?? 9) - (so[b.suit] ?? 9);
+    return sd !== 0 ? sd : a.value - b.value;
+  });
 
   return (
-    <div className="table-layout">
-      {/* Header */}
-      <div className="table-header">
-        {roomId && <span className="th-room">{roomId}</span>}
+    <div className="mj-table">
+      {/* ── Header ── */}
+      <header className="mj-header">
+        {roomId && <span className="mj-room">{roomId}</span>}
         <span>墙:{gameState.wallCount}</span>
         <span>第{gameState.roundNumber ?? 1}局 R{gameState.turnCount}</span>
-        <span className={isMyCurrent ? 'th-myturn' : ''}>
+        <span className={selfIdx === currentIdx ? 'mj-myturn' : ''}>
           ▶{currentIdx === myIndex ? '你' : SEATS[currentIdx]}
         </span>
-        <button className="th-btn" onClick={onVoteDissolve}>解散</button>
+        <button className="mj-hdr-btn" onClick={onVoteDissolve}>解散</button>
+      </header>
+
+      {/* ── Table felt ── */}
+      <div className="mj-felt">
+
+        {/* ── Top (opponent across) ── */}
+        <div className="mj-top">
+          <div className="mj-pcard">
+            <span className="mj-seat">{SEATS[topIdx]}</span>
+            <span className="mj-pscore">{gameState.players[topIdx].score}</span>
+            <span className="mj-phand">{gameState.players[topIdx].handCount}张</span>
+            <span className="mj-picons">{statusIcon(topIdx)}</span>
+          </div>
+          {renderRiver(topIdx, 'river-top')}
+        </div>
+
+        {/* ── Left (upstream) ── */}
+        <div className="mj-left">
+          <div className="mj-pcard mj-pcard-v">
+            <span className="mj-seat">{SEATS[leftIdx]}</span>
+            <span className="mj-pscore">{gameState.players[leftIdx].score}</span>
+            <span className="mj-phand">{gameState.players[leftIdx].handCount}张</span>
+            <span className="mj-picons">{statusIcon(leftIdx)}</span>
+          </div>
+          {renderRiver(leftIdx, 'river-left')}
+        </div>
+
+        {/* ── Right (downstream) ── */}
+        <div className="mj-right">
+          {renderRiver(rightIdx, 'river-right')}
+          <div className="mj-pcard mj-pcard-v">
+            <span className="mj-seat">{SEATS[rightIdx]}</span>
+            <span className="mj-pscore">{gameState.players[rightIdx].score}</span>
+            <span className="mj-phand">{gameState.players[rightIdx].handCount}张</span>
+            <span className="mj-picons">{statusIcon(rightIdx)}</span>
+          </div>
+        </div>
+
+        {/* ── Center (table center — melds overflow here) ── */}
+        <div className="mj-center">
+          <MeldDisplay melds={gameState.players[topIdx].melds} />
+          <MeldDisplay melds={gameState.players[leftIdx].melds} />
+          <MeldDisplay melds={gameState.players[rightIdx].melds} />
+        </div>
+
+        {/* ── Bottom river (self discards) ── */}
+        <div className="mj-self-river">
+          {renderRiver(selfIdx, 'river-bottom')}
+        </div>
       </div>
 
-      {/* Table body */}
-      <div className="table-body">
-        {/* Top opponent */}
-        <div className="zone-top">
-          {renderPlayerCard(topIdx, 'top')}
-          {renderRiver(topIdx)}
+      {/* ── Bottom: action bar + self info + hand ── */}
+      <div className="mj-bottom">
+        {children}
+        <div className="mj-self-info">
+          <span className="mj-seat">{SEATS[selfIdx]}{selfIdx === gameState.dealerIndex ? '庄' : ''}</span>
+          <span className="mj-pscore">分:{selfPlayer.score}</span>
+          {autoPlayers.includes(selfPlayer.id) && <span>🤖</span>}
+          <MeldDisplay melds={selfPlayer.melds} />
         </div>
-
-        {/* Middle row: left | center rivers | right */}
-        <div className="zone-middle">
-          <div className="zone-left">
-            {renderPlayerCard(leftIdx, 'left')}
-            {renderRiver(leftIdx)}
-          </div>
-
-          <div className="zone-center">
-            {/* Center: self river + right river overflow */}
-          </div>
-
-          <div className="zone-right">
-            {renderPlayerCard(rightIdx, 'right')}
-            {renderRiver(rightIdx)}
-          </div>
-        </div>
-
-        {/* Bottom: self area */}
-        <div className="zone-bottom">
-          {renderRiver(selfIdx)}
-          {/* Action bar slot */}
-          {children}
-          {/* Self info bar */}
-          <div className="self-info">
-            <span className="pc-seat">{SEATS[selfIdx]}{selfIdx === gameState.dealerIndex ? '庄' : ''}</span>
-            <span className="pc-score">分:{selfPlayer.score}</span>
-            {autoPlayers.includes(selfPlayer.id) && <span className="pc-icon">🤖</span>}
-            <MeldDisplay melds={selfPlayer.melds} />
-          </div>
-          {/* Hand */}
-          <div className="self-hand">
-            {[...gameState.myHand].sort((a, b) => {
-              const so: Record<string, number> = { wan: 0, tiao: 1, tong: 2, feng: 3, zi: 4 };
-              const sd = (so[a.suit] ?? 9) - (so[b.suit] ?? 9);
-              return sd !== 0 ? sd : a.value - b.value;
-            }).map((tile) => (
-              <Tile
-                key={tile.id}
-                tile={tile}
-                size="lg"
-                isSelected={tile.id === selectedTileId}
-                isLastDrawn={tile.id === lastDrawnTileId}
-                onClick={() => handleTileClick(tile.id)}
-              />
-            ))}
-          </div>
+        <div className="mj-hand">
+          {sortedHand.map((tile) => (
+            <Tile
+              key={tile.id}
+              tile={tile}
+              size="lg"
+              isSelected={tile.id === selectedTileId}
+              isLastDrawn={tile.id === lastDrawnTileId}
+              onClick={() => handleTileClick(tile.id)}
+            />
+          ))}
         </div>
       </div>
     </div>
