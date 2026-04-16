@@ -24,8 +24,8 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
   const cur = gameState.currentPlayerIndex;
   const auto = gameState.autoPlayPlayerIds || [];
   const lastDrawn = gameState.lastDrawnTileId ?? undefined;
+  const allIds = gameState.players.map((p) => p.id);
 
-  // Two-click discard
   const [sel, setSel] = useState<number | null>(null);
   useEffect(() => { setSel(null); }, [gameState.turnCount, gameState.phase, cur]);
 
@@ -56,7 +56,10 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
     );
   };
 
-  /** River: dynamic columns based on available width */
+  const Melds = ({ i }: { i: number }) => (
+    <MeldDisplay melds={gameState.players[i].melds} ownerSeatIndex={i} allPlayerIds={allIds} />
+  );
+
   const River = ({ i, cls }: { i: number; cls: string }) => {
     const tiles = gameState.players[i].discardPool;
     if (!tiles.length) return <div className={`rv ${cls}`} />;
@@ -78,7 +81,6 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
 
   return (
     <div className="T">
-      {/* Header */}
       <header className="T-hd">
         {roomId && <span className="hd-r">{roomId}</span>}
         <span>第{gameState.roundNumber ?? 1}局 R{gameState.turnCount}</span>
@@ -86,65 +88,55 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
         <button className="hd-b" onClick={onVoteDissolve}>解散</button>
       </header>
 
-      {/* Felt — 5-row layout:
-          row1: top-player + melds
-          row2: top-river (toward center)
-          row3: left-edge | left-rv | CENTER | right-rv | right-edge
-          row4: bottom-river (toward center)
-          row5: (empty, self melds in bottom bar)
-      */}
       <div className="T-felt">
-        {/* Row 1: Top player info + melds (edge zone) */}
-        <div className="f-top-edge">
-          <PCard i={topI} />
-          <MeldDisplay melds={gameState.players[topI].melds} />
-        </div>
-
-        {/* Row 2: Top river (closest to top player, inside felt) */}
+        {/* Top: card on edge, then meld+river toward center (left-to-right start) */}
+        <div className="f-top-edge"><PCard i={topI} /></div>
         <div className="f-top-rv">
-          <River i={topI} cls="rv-h" />
+          <div className="meld-river-row">
+            <Melds i={topI} />
+            <River i={topI} cls="rv-h" />
+          </div>
         </div>
 
-        {/* Row 3: Middle — left | center | right */}
+        {/* Middle row */}
         <div className="f-mid">
-          {/* Left edge: card + melds */}
-          <div className="f-left-edge">
-            <PCard i={leftI} v />
-            <MeldDisplay melds={gameState.players[leftI].melds} />
-          </div>
-          {/* Left river (toward center) */}
+          {/* Left: card on edge, meld+river toward center (top-to-bottom start) */}
+          <div className="f-left-edge"><PCard i={leftI} v /></div>
           <div className="f-left-rv">
-            <River i={leftI} cls="rv-v" />
+            <div className="meld-river-col">
+              <Melds i={leftI} />
+              <River i={leftI} cls="rv-v" />
+            </div>
           </div>
-          {/* Center: wall display */}
-          <div className="f-ctr">
-            <WallDisplay wallCount={gameState.wallCount} />
-          </div>
-          {/* Right river (toward center — LEFT side of right zone) */}
+
+          <div className="f-ctr"><WallDisplay wallCount={gameState.wallCount} /></div>
+
+          {/* Right: mirror of left — river+meld from center outward (top-to-bottom start) */}
           <div className="f-right-rv">
-            <River i={rightI} cls="rv-v" />
+            <div className="meld-river-col meld-river-col-r">
+              <Melds i={rightI} />
+              <River i={rightI} cls="rv-v" />
+            </div>
           </div>
-          {/* Right edge: card + melds */}
-          <div className="f-right-edge">
-            <PCard i={rightI} v />
-            <MeldDisplay melds={gameState.players[rightI].melds} />
-          </div>
+          <div className="f-right-edge"><PCard i={rightI} v /></div>
         </div>
 
-        {/* Row 4: Bottom river (self discards, toward center) */}
+        {/* Bottom: self meld+river toward center (left-to-right start) */}
         <div className="f-bot-rv">
-          <River i={selfI} cls="rv-h" />
+          <div className="meld-river-row">
+            <Melds i={selfI} />
+            <River i={selfI} cls="rv-h" />
+          </div>
         </div>
       </div>
 
-      {/* Bottom: action bar + self info + hand */}
+      {/* Bottom bar */}
       <div className="T-bot">
         {children}
         <div className="b-info">
           <span className="pc-s">{SEATS[selfI]}{selfI === gameState.dealerIndex ? '庄' : ''}</span>
           <span className="pc-sc">分:{self.score}</span>
           {auto.includes(self.id) && <span>🤖</span>}
-          <MeldDisplay melds={self.melds} />
         </div>
         <div className="b-hand">
           {sorted.map((t) => (
