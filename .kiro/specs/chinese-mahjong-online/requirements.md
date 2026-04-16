@@ -300,3 +300,26 @@
 2. WHEN Player 第二次点击同一张已选中的牌时，THE Client_UI SHALL 执行出牌操作
 3. WHEN Player 点击另一张不同的牌时，THE Client_UI SHALL 取消之前的选中状态，将新点击的牌设为选中
 4. WHEN 游戏状态发生变化（回合切换、阶段变化）时，THE Client_UI SHALL 自动清除选中状态
+
+### 需求 22：UI 架构重构（牌桌中心化）
+
+**用户故事：** 作为玩家，我希望游戏界面更接近真实麻将桌的视觉体验，信息层级清晰，空间利用率高。
+
+#### 验收标准
+
+1. THE Client_UI SHALL 使用中心化牌桌布局，四位玩家环绕中心区域排列（上/左/右/下）
+2. THE Client_UI SHALL 将弃牌区（河）渲染为固定宽度的 Grid（每行 6 张），模拟真实麻将摆放
+3. THE Client_UI SHALL 将牌抽象为独立的 Tile 组件，支持选中/跳动/阴影效果，预留 background-image 接口用于未来图形化
+4. THE Client_UI SHALL 使用图标代替冗余文字：🤖 表示托管，🕒 表示当前出牌，🔴 表示断线
+5. THE Client_UI SHALL 将对手信息精简为紧凑的状态卡片（座位+分数+手牌数+状态图标）
+6. THE Client_UI SHALL 预留音频服务接口（audioService），在关键动作处埋点
+
+### 需求 23：房间号输入验证
+
+**用户故事：** 作为玩家，我希望输入房间号时有格式限制和错误提示。
+
+#### 验收标准
+
+1. THE Client_UI SHALL 限制房间号输入为 6 位大写字母+数字（与系统生成的房间号格式一致）
+2. THE Client_UI SHALL 自动过滤非法字符，仅允许 A-Z（排除 I/O）和 2-9
+3. WHEN 输入长度不足 6 位时，THE Client_UI SHALL 禁用"加入房间"按钮

@@ -28,6 +28,15 @@ export function Lobby({
 }: LobbyProps) {
   const [inputRoomId, setInputRoomId] = useState('');
 
+  // Room ID: 6 chars, uppercase A-Z (no I/O) + 2-9
+  const ROOM_ID_REGEX = /^[A-HJKLMNP-Z2-9]{0,6}$/;
+  const isValidRoomId = inputRoomId.length === 6 && ROOM_ID_REGEX.test(inputRoomId);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.toUpperCase().replace(/[^A-HJKLMNP-Z2-9]/g, '').slice(0, 6);
+    setInputRoomId(val);
+  };
+
   const isOwner = roomSync?.ownerId === myId;
   const myPlayer = roomSync?.players.find((p) => p.id === myId);
   const iAmReady = myPlayer?.isReady ?? false;
@@ -44,10 +53,10 @@ export function Lobby({
         <div className="lobby-actions">
           <button className="lobby-btn" onClick={onCreateRoom} disabled={!isConnected}>创建房间</button>
           <div className="join-section">
-            <input type="text" placeholder="输入房间号" value={inputRoomId}
-              onChange={(e) => setInputRoomId(e.target.value.toUpperCase())} className="room-input" />
+            <input type="text" placeholder="6位房间号" value={inputRoomId}
+              onChange={handleInputChange} className="room-input" maxLength={6} />
             <button className="lobby-btn" onClick={() => onJoinRoom(inputRoomId)}
-              disabled={!isConnected || !inputRoomId}>加入房间</button>
+              disabled={!isConnected || !isValidRoomId}>加入房间</button>
           </div>
           {roomError && <div style={{ color: '#ff6b6b', fontSize: '0.9rem', marginTop: '0.5rem' }}>⚠ {roomError}</div>}
         </div>
