@@ -72,6 +72,10 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null):
       setWinResult(null);
       setIsDraw(false);
       setDiceResult(null);
+      // Snapshot scores for delta calculation
+      const map = new Map<string, number>();
+      for (const p of state.players) map.set(p.id, p.score);
+      prevScoresRef.current = map;
       if (state.phase === 'TURN') startTimer(TURN_SECONDS);
       else if (state.phase === 'AWAITING') startTimer(AWAITING_SECONDS);
     };
