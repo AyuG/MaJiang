@@ -1,7 +1,6 @@
 'use client';
 
 import type { Tile as TileType } from '@/types';
-import { TileFace } from './TileFace';
 
 interface TileProps {
   tile: TileType;
@@ -12,10 +11,14 @@ interface TileProps {
   onClick?: () => void;
 }
 
+/** Map tile suit+value to image filename */
+function tileImagePath(tile: TileType): string {
+  return `/tiles/${tile.suit}_${tile.value}.png`;
+}
+
 /**
- * Mahjong tile component with graphical face rendering.
- * - Front: SVG/styled patterns matching traditional tile art
- * - Back: solid green (face down)
+ * Mahjong tile — renders using riichi-mahjong-tiles PNG assets.
+ * Tile art: CC0 public domain (FluffyStuff/riichi-mahjong-tiles).
  */
 export function Tile({ tile, isSelected, isLastDrawn, isFaceDown, size = 'md', onClick }: TileProps) {
   const classes = [
@@ -27,17 +30,16 @@ export function Tile({ tile, isSelected, isLastDrawn, isFaceDown, size = 'md', o
     onClick ? 'tile-clickable' : '',
   ].filter(Boolean).join(' ');
 
+  const imgSrc = isFaceDown ? '/tiles/back.png' : tileImagePath(tile);
+
   return (
     <div className={classes} onClick={onClick} data-tile-id={tile.id}>
-      {isFaceDown ? (
-        <div className="tile-back" />
-      ) : (
-        <TileFace tile={tile} />
-      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={imgSrc} alt="" className="tile-img" draggable={false} />
     </div>
   );
 }
 
 export function TileBack({ count }: { count: number }) {
-  return <span className="tile-back-row">{count}张</span>;
+  return <span className="tile-back-label">{count}张</span>;
 }

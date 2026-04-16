@@ -20,6 +20,10 @@ redis-data/
 .DS_Store
 Thumbs.db
 
+# Reference projects (source material, not part of build)
+mahjong-master/
+riichi-mahjong-tiles-master/
+
 # IDE
 .idea/
 .vscode/

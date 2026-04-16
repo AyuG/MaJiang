@@ -99,21 +99,23 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
 .b-info{display:flex;align-items:center;gap:.3rem;font-size:.65rem;z-index:30}
 .b-hand{display:flex;justify-content:center;gap:1px;width:100%;max-width:100vw;padding:0 1px 4px 1px;z-index:50}
 
-/* ═══ TILE ═══ */
-.tile{display:flex;align-items:center;justify-content:center;background:#f0e8d8;color:#1a1a2e;border:1px solid #c4b89a;border-radius:3px;font-weight:bold;user-select:none;box-shadow:0 1px 2px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.3);transition:transform .1s,box-shadow .1s}
-.tile-sm{font-size:clamp(.42rem,1.1vw,.58rem);padding:1px 2px;min-width:clamp(.9rem,2.2vw,1.3rem);min-height:clamp(1.1rem,2.8vw,1.5rem)}
-.tile-md{font-size:clamp(.52rem,1.4vw,.72rem);padding:2px 3px;min-width:clamp(1.3rem,3.2vw,1.7rem)}
-.tile-lg{font-size:clamp(.58rem,1.8vw,.92rem);padding:2px 3px;min-width:clamp(1.4rem,calc(100vw/16),2.3rem);min-height:clamp(1.9rem,calc(100vw/12),3rem);aspect-ratio:3/4}
+/* ═══ TILE (image-based) ═══ */
+.tile{position:relative;display:flex;align-items:center;justify-content:center;background:#f5f0e6;border:1px solid #c4b89a;border-radius:4px;user-select:none;box-shadow:0 1px 3px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.4);transition:transform .1s,box-shadow .1s;overflow:hidden}
+.tile-img{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none}
+.tile-sm{width:clamp(.9rem,2.2vw,1.4rem);height:clamp(1.2rem,3vw,1.9rem)}
+.tile-md{width:clamp(1.3rem,3.2vw,1.8rem);height:clamp(1.7rem,4.2vw,2.4rem)}
+.tile-lg{width:clamp(1.5rem,calc(100vw/16),2.5rem);height:clamp(2rem,calc(100vw/12),3.3rem)}
 .tile-clickable{cursor:pointer}
-.tile-clickable:hover{transform:translateY(-2px);box-shadow:0 3px 6px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.3)}
+.tile-clickable:hover{transform:translateY(-3px);box-shadow:0 4px 8px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.4)}
 .tile-clickable:active{transform:translateY(0)}
-.tile-last-drawn{border-color:#d4a017;color:#8b6914;background:#faf3dc}
-.tile-selected{border-color:#e53e3e;color:#c53030;background:#fff5f5;transform:translateY(-4px);box-shadow:0 4px 8px rgba(229,62,62,.25)}
-.tile-facedown{background:#276749;color:#38a169;border-color:#2f855a}
+.tile-last-drawn{border-color:#d4a017;box-shadow:0 0 6px rgba(212,160,23,.5),inset 0 1px 0 rgba(255,255,255,.4)}
+.tile-selected{border-color:#e53e3e;transform:translateY(-5px);box-shadow:0 5px 10px rgba(229,62,62,.3)}
+.tile-facedown{background:#1a6b3a;border-color:#2f855a}
 .tile-bounce{animation:bounce 1.2s ease-in-out 3}
 @keyframes bounce{0%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}60%{transform:translateY(0)}80%{transform:translateY(-3px)}}
 .tile-selected.tile-bounce{animation:selbounce .8s ease-in-out infinite}
-@keyframes selbounce{0%,100%{transform:translateY(-4px)}50%{transform:translateY(-8px)}}
+@keyframes selbounce{0%,100%{transform:translateY(-5px)}50%{transform:translateY(-9px)}}
+.tile-back-label{color:#9ca3af;font-size:.6rem}
 
 /* ═══ ACTION BAR (z-60) ═══ */
 .action-bar{display:flex;align-items:center;justify-content:center;gap:.35rem;padding:.15rem .35rem;background:rgba(17,24,39,.92);border:1px solid #374151;border-radius:4px;backdrop-filter:blur(3px);z-index:60}
@@ -177,71 +179,4 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   .score-panel{bottom:calc(3.5rem + 3px)}
 }
 
-/* ═══ TILE FACE RENDERING ═══ */
 
-/* Base tile face container */
-.tf{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;overflow:hidden}
-.tf-svg{width:80%;height:80%}
-
-/* 万子 (Wan) — red number + 萬 */
-.tf-wan{gap:0}
-.tf-wan-num{color:#c53030;font-weight:900;line-height:1;font-size:1.1em}
-.tf-wan-char{color:#c53030;font-weight:700;line-height:1;font-size:.65em}
-
-/* 筒子 (Tong) — circle grid */
-.tf-tong{display:grid;gap:0;padding:1px;width:100%;height:100%;align-content:center;justify-items:center}
-.tf-tong1{display:flex;align-items:center;justify-content:center}
-.tf-circle{width:auto;height:auto}
-.tf-tong-2{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
-.tf-tong-2 .tf-circle{width:60%;height:auto}
-.tf-tong-3{grid-template-columns:1fr;grid-template-rows:1fr 1fr 1fr}
-.tf-tong-3 .tf-circle{width:55%;height:auto}
-.tf-tong-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
-.tf-tong-4 .tf-circle{width:80%;height:auto}
-.tf-tong-5{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr}
-.tf-tong-5 .tf-circle{width:70%;height:auto}
-.tf-tong-5 .tf-circle:nth-child(5){grid-column:1/3}
-.tf-tong-6{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr}
-.tf-tong-6 .tf-circle{width:70%;height:auto}
-.tf-tong-7{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr 1fr}
-.tf-tong-7 .tf-circle{width:65%;height:auto}
-.tf-tong-7 .tf-circle:nth-child(7){grid-column:1/3}
-.tf-tong-8{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr 1fr}
-.tf-tong-8 .tf-circle{width:65%;height:auto}
-.tf-tong-9{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr}
-.tf-tong-9 .tf-circle{width:85%;height:auto}
-
-/* 条子 (Tiao) — bamboo grid */
-.tf-tiao{display:grid;gap:0;padding:1px;width:100%;height:100%;align-content:center;justify-items:center}
-.tf-tiao1{display:flex;align-items:center;justify-content:center}
-.tf-bamboo{width:auto;height:auto}
-.tf-tiao-2{grid-template-columns:1fr 1fr;grid-template-rows:1fr}
-.tf-tiao-2 .tf-bamboo{width:50%;height:90%}
-.tf-tiao-3{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr}
-.tf-tiao-3 .tf-bamboo{width:60%;height:90%}
-.tf-tiao-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
-.tf-tiao-4 .tf-bamboo{width:50%;height:80%}
-.tf-tiao-5{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr}
-.tf-tiao-5 .tf-bamboo{width:50%;height:80%}
-.tf-tiao-5 .tf-bamboo:nth-child(5){grid-column:1/3}
-.tf-tiao-6{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr}
-.tf-tiao-6 .tf-bamboo{width:55%;height:80%}
-.tf-tiao-7{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr}
-.tf-tiao-7 .tf-bamboo{width:55%;height:80%}
-.tf-tiao-7 .tf-bamboo:nth-child(7){grid-column:2/3}
-.tf-tiao-8{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr 1fr}
-.tf-tiao-8 .tf-bamboo{width:50%;height:75%}
-.tf-tiao-9{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr}
-.tf-tiao-9 .tf-bamboo{width:55%;height:80%}
-
-/* 风牌 (Feng) — blue character */
-.tf-feng{display:flex;align-items:center;justify-content:center}
-.tf-feng-char{color:#1a5fb4;font-weight:900;font-size:1.3em;line-height:1}
-
-/* 字牌 (Zi) */
-.tf-zi{display:flex;align-items:center;justify-content:center}
-.tf-zhong{color:#c53030;font-weight:900;font-size:1.3em;line-height:1}
-.tf-fa{color:#2a7f2a;font-weight:900;font-size:1.3em;line-height:1}
-
-/* Tile back (face down) — solid green */
-.tile-back{width:100%;height:100%;background:#1a6b3a;border-radius:2px;background-image:linear-gradient(135deg,rgba(255,255,255,.08) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.08) 50%,rgba(255,255,255,.08) 75%,transparent 75%);background-size:6px 6px}

@@ -158,11 +158,14 @@ export function setupSocketHandlers(
 
   io.on('connection', (socket: Socket<ClientEvents, ServerEvents>) => {
 
+    // Extract persistent player ID from auth handshake (falls back to socket.id)
+    const persistentId = (socket.handshake.auth as any)?.playerId || socket.id;
+
     // ── Room: create ─────────────────────────────────
     socket.on('room:create', () => {
-      const playerId = socket.id;
+      const playerId = persistentId;
       const roomId = roomManager.createRoom(playerId);
-      roomManager.setReady(roomId, playerId); // auto-ready on create
+      roomManager.setReady(roomId, playerId);
       socketMap.set(socket.id, { roomId, playerId });
       socket.join(roomId);
       socket.emit('room:created', roomId);
@@ -171,7 +174,7 @@ export function setupSocketHandlers(
 
     // ── Room: join ───────────────────────────────────
     socket.on('room:join', async (roomId: string) => {
-      const playerId = socket.id;
+      const playerId = persistentId;
       const room = roomManager.getRoom(roomId);
 
       if (!room) {
@@ -179,15 +182,39 @@ export function setupSocketHandlers(
         return;
       }
 
-      // Check if room is playing and has a disconnected player → reconnect/substitute
+      // Check if this player is already a member (reconnecting with same persistent ID)
       if (room.status === 'playing') {
+        // First: check if this exact playerId exists in the room (true reconnect)
+        const ownSeat = room.players.find((p) => p.id === playerId);
+        if (ownSeat) {
+          // True reconnect — same persistent ID
+          ownSeat.isConnected = true;
+          socketMap.set(socket.id, { roomId, playerId });
+          socket.join(roomId);
+
+          try {
+            const state = await gameController.handleReconnect(roomId, playerId);
+            const patchedState: GameState = {
+              ...state,
+              players: state.players.map((p) =>
+                p.id === playerId ? { ...p, isConnected: true } : p,
+              ),
+              timeoutAutoPlayerIds: (state.timeoutAutoPlayerIds ?? []).filter((id) => id !== playerId),
+            };
+            await gameController['redisStore'].saveGameState(roomId, patchedState);
+            socket.emit('game:started', toClientState(patchedState, playerId));
+            await broadcastGameState(io, socketMap, roomId, patchedState, turnTimer, handleRoundEnd, handleAutoPlay);
+          } catch { /* ignore */ }
+          return;
+        }
+
+        // Second: check for any disconnected seat to substitute into
         const disconnectedPlayer = room.players.find((p) => !p.isConnected);
         if (!disconnectedPlayer) {
           socket.emit('room:error' as any, '房间已满，游戏进行中');
           return;
         }
 
-        // Substitute: replace disconnected player's ID with new socket ID
         const oldPlayerId = disconnectedPlayer.id;
         disconnectedPlayer.id = playerId;
         disconnectedPlayer.isConnected = true;

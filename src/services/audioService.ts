@@ -1,46 +1,41 @@
 /**
  * Audio service — plays sound effects for key game actions.
- * Currently a stub that logs events; replace with actual Audio() calls
- * when sound assets are added to /public/sounds/.
- *
- * Usage: audioService.play('discard')
+ * Sound assets from mahjong-master (MIT license).
  */
 
 type SoundEvent =
-  | 'select'    // tile selected (first click)
-  | 'discard'   // tile discarded (second click)
-  | 'draw'      // tile drawn from wall
-  | 'peng'      // peng action
-  | 'gang'      // gang action
-  | 'hu'        // hu (win)
-  | 'timeout'   // turn timeout
-  | 'dice';     // dice roll
+  | 'select'
+  | 'discard'
+  | 'draw'
+  | 'peng'
+  | 'gang'
+  | 'hu'
+  | 'timeout'
+  | 'dice';
+
+const SOUND_MAP: Partial<Record<SoundEvent, string>> = {
+  discard: '/sounds/discard.mp3',
+  peng: '/sounds/action.mp3',
+  gang: '/sounds/action.mp3',
+  hu: '/sounds/win.mp3',
+  dice: '/sounds/action.mp3',
+};
 
 class AudioService {
   private enabled = true;
-  private sounds: Partial<Record<SoundEvent, string>> = {
-    // Future: map to actual audio file paths
-    // select: '/sounds/select.mp3',
-    // discard: '/sounds/discard.mp3',
-  };
 
   play(event: SoundEvent): void {
-    if (!this.enabled) return;
-    const src = this.sounds[event];
-    if (src && typeof window !== 'undefined') {
-      try {
-        const audio = new Audio(src);
-        audio.volume = 0.5;
-        audio.play().catch(() => { /* autoplay blocked */ });
-      } catch { /* ignore */ }
-    }
-    // Debug: uncomment to trace audio events
-    // console.log(`[audio] ${event}`);
+    if (!this.enabled || typeof window === 'undefined') return;
+    const src = SOUND_MAP[event];
+    if (!src) return;
+    try {
+      const audio = new Audio(src);
+      audio.volume = 0.5;
+      audio.play().catch(() => { /* autoplay blocked */ });
+    } catch { /* ignore */ }
   }
 
-  setEnabled(enabled: boolean): void {
-    this.enabled = enabled;
-  }
+  setEnabled(v: boolean): void { this.enabled = v; }
 }
 
 export const audioService = new AudioService();
