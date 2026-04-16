@@ -471,6 +471,40 @@
     - 不遮挡手牌区域
     - _需求: 18.6_
 
+- [x] 21. v1.2.1 稳定性修复
+  - [x] 21.1 标题更名
+    - 全局标题从"中国麻将在线"改为"在线麻将"
+    - _需求: 15.1_
+
+  - [x] 21.2 退出房间功能
+    - Lobby 新增"退出房间"按钮
+    - 点击后断开 Socket 并清除状态，返回首页大厅
+    - useMahjongSocket 新增 leaveRoom 方法
+    - _需求: 10.1_
+
+  - [x] 21.3 积分日志房间号前缀
+    - ScoreLogEntry 新增 roomId 字段
+    - ScorePanel 每条记录前显示 [房间号] 前缀
+    - _需求: 18.6_
+
+  - [x] 21.4 房间加入错误处理优化
+    - 加入按钮仅在 length < 6 时置灰
+    - length === 6 但房间无效时弹出错误提示（不置灰按钮）
+    - 不再提前设置 localRoomId，等 room:sync 确认后再设置
+    - _需求: 23.1, 23.2_
+
+  - [x] 21.5 移动端 ErrorBoundary
+    - 创建 ErrorBoundary 组件，捕获 client-side exception
+    - 显示"页面异常"恢复 UI，提供刷新按钮
+    - 包裹在 RootLayout 中
+    - _需求: 20.5_
+
+  - [x] 21.6 Socket 自动重连同步
+    - useGameState 监听 socket connect 事件
+    - 重连后自动 re-join 上次所在房间
+    - 服务端 room:join 的断线补位逻辑处理恢复
+    - _需求: 11.3_
+
 ## 说明
 
 - 标记 `*` 的子任务为可选测试任务，可跳过以加速 MVP 开发

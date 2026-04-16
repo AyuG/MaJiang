@@ -245,6 +245,7 @@ body {
 .score-panel-body { padding: 0.3rem 0.5rem; max-height: 25vh; overflow-y: auto; }
 .score-log-entry { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0.1rem 0; border-bottom: 1px solid #21262d; }
 .score-log-round { color: #ffd700; font-weight: bold; }
+.score-log-room { color: #58a6ff; font-size: 0.6rem; }
 .score-log-result { color: #8b949e; }
 .score-log-delta { font-size: 0.65rem; }
 

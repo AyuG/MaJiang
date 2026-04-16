@@ -20,6 +20,7 @@ export interface DiceInfo {
 
 export interface ScoreLogEntry {
   round: number;
+  roomId?: string;
   result: 'win' | 'draw';
   winnerId?: string;
   scores: Array<{ playerId: string; seat: string; delta: number }>;
@@ -70,7 +71,7 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null):
       setRoomId(state.roomId);
       setWinResult(null);
       setIsDraw(false);
-      setDiceResult(null); // clear dice display when game starts
+      setDiceResult(null);
       if (state.phase === 'TURN') startTimer(TURN_SECONDS);
       else if (state.phase === 'AWAITING') startTimer(AWAITING_SECONDS);
     };
@@ -104,6 +105,7 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null):
             : null;
           setScoreLog((log) => [...log, {
             round: state.roundNumber ?? log.length + 1,
+            roomId: state.roomId,
             result: state.phase === 'WIN' ? 'win' : 'draw',
             winnerId: winner?.id,
             scores: deltas,
@@ -150,7 +152,13 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null):
       setDiceResult(null);
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       setRemainingSeconds(0);
-      // Score log is preserved — not cleared on dissolve
+    };
+
+    // Auto-rejoin room on socket reconnect (mobile background recovery)
+    const onReconnect = () => {
+      if (roomId) {
+        socket.emit('room:join', roomId);
+      }
     };
 
     socket.on('game:started', onStarted);
@@ -161,6 +169,7 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null):
     socket.on('game:draw', onDraw);
     socket.on('game:dice-result' as any, onDiceResult);
     socket.on('room:dissolved', onDissolved);
+    socket.on('connect', onReconnect);
 
     return () => {
       socket.off('game:started', onStarted);
@@ -171,9 +180,10 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null):
       socket.off('game:draw', onDraw);
       socket.off('game:dice-result' as any, onDiceResult);
       socket.off('room:dissolved', onDissolved);
+      socket.off('connect', onReconnect);
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [socket, startTimer]);
+  }, [socket, startTimer, roomId]);
 
   const availableActions: string[] = [];
   const gangOptions: GangInfo[] = [];

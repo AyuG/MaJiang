@@ -80,6 +80,15 @@ export function useMahjongSocket() {
     [socket],
   );
 
+  const leaveRoom = useCallback(() => {
+    // Disconnect triggers server-side cleanup (remove from room)
+    // Then reconnect to get a fresh socket
+    if (socket) {
+      socket.disconnect();
+      setTimeout(() => socket.connect(), 100);
+    }
+  }, [socket]);
+
   return {
     socket,
     isConnected,
@@ -106,5 +115,6 @@ export function useMahjongSocket() {
     pass,
     voteDissolve,
     voteDissolveReply,
+    leaveRoom,
   };
 }

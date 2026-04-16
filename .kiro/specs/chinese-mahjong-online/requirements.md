@@ -323,3 +323,23 @@
 1. THE Client_UI SHALL 限制房间号输入为 6 位大写字母+数字（与系统生成的房间号格式一致）
 2. THE Client_UI SHALL 自动过滤非法字符，仅允许 A-Z（排除 I/O）和 2-9
 3. WHEN 输入长度不足 6 位时，THE Client_UI SHALL 禁用"加入房间"按钮
+
+### 需求 24：退出房间
+
+**用户故事：** 作为玩家，我希望能随时退出当前房间回到大厅。
+
+#### 验收标准
+
+1. THE Client_UI SHALL 在房间内显示"退出房间"按钮
+2. WHEN Player 点击"退出房间"时，THE Client_UI SHALL 断开当前 Socket 连接，清除本地状态，返回首页大厅
+3. THE Game_Server SHALL 在检测到 Player 断开连接后，按照断线处理逻辑处理该 Player 的离开
+
+### 需求 25：移动端稳定性
+
+**用户故事：** 作为手机玩家，我希望切后台返回后游戏能自动恢复，不会崩溃。
+
+#### 验收标准
+
+1. THE Client_UI SHALL 包含 ErrorBoundary 组件，捕获所有 client-side 异常并显示恢复 UI
+2. WHEN Socket 断连后重新连接时，THE Client_UI SHALL 自动尝试重新加入上次所在的房间
+3. THE Game_Server SHALL 在检测到重连请求时，若房间存在断线席位，优先触发恢复流程

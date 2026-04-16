@@ -1,9 +1,9 @@
 import './globals.css';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export const metadata = {
-  title: '中国麻将在线',
-  description: '四人在线中国麻将游戏',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
+  title: '在线麻将',
+  description: '四人在线麻将游戏',
 };
 
 export default function RootLayout({
@@ -16,7 +16,9 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
       </head>
-      <body>{children}</body>
+      <body>
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </body>
     </html>
   );
 }

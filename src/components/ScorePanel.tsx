@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 interface ScoreLogEntry {
   round: number;
+  roomId?: string;
   result: 'win' | 'draw';
   winnerId?: string;
   scores: Array<{ playerId: string; seat: string; delta: number }>;
@@ -26,8 +27,9 @@ export function ScorePanel({ myPlayerId, scoreLog }: ScorePanelProps) {
       </button>
       {isOpen && (
         <div className="score-panel-body">
-          {scoreLog.map((entry) => (
-            <div key={entry.round} className="score-log-entry">
+          {scoreLog.map((entry, idx) => (
+            <div key={idx} className="score-log-entry">
+              {entry.roomId && <span className="score-log-room">[{entry.roomId}]</span>}
               <span className="score-log-round">第{entry.round}局</span>
               <span className="score-log-result">{entry.result === 'win' ? '胡' : '流'}</span>
               {entry.scores.filter((s) => s.delta !== 0).map((s) => (

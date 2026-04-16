@@ -35,7 +35,14 @@ export default function Home() {
     hu,
     pass,
     voteDissolve,
+    leaveRoom,
   } = useMahjongSocket();
+
+  const handleLeaveRoom = useCallback(() => {
+    setLocalRoomId(null);
+    setRoomSync(null);
+    leaveRoom();
+  }, [leaveRoom]);
 
   const [localRoomId, setLocalRoomId] = useState<string | null>(null);
   const [roomSync, setRoomSync] = useState<RoomSyncData | null>(null);
@@ -46,7 +53,10 @@ export default function Home() {
     if (!socket) return;
 
     const onCreated = (id: string) => setLocalRoomId(id);
-    const onSync = (data: RoomSyncData) => setRoomSync(data);
+    const onSync = (data: RoomSyncData) => {
+      setRoomSync(data);
+      setLocalRoomId(data.roomId); // confirm we're in this room
+    };
     const onKicked = (targetId: string) => {
       if (targetId === socket.id) {
         setLocalRoomId(null);
@@ -91,7 +101,7 @@ export default function Home() {
   const handleJoinRoom = useCallback(
     (id: string) => {
       setRoomError(null);
-      setLocalRoomId(id);
+      // Don't set localRoomId yet — wait for room:sync to confirm
       joinRoom(id);
     },
     [joinRoom],
@@ -200,6 +210,7 @@ export default function Home() {
         onKick={kickPlayer}
         onDissolve={dissolveRoom}
         onStart={startGame}
+        onLeaveRoom={handleLeaveRoom}
       />
       {diceResult && !gameState && (
         <div className="dice-overlay">

@@ -16,6 +16,7 @@ interface LobbyProps {
   onKick: (targetId: string) => void;
   onDissolve: () => void;
   onStart: () => void;
+  onLeaveRoom: () => void;
 }
 
 const SEAT_LABELS: Record<string, string> = {
@@ -24,7 +25,7 @@ const SEAT_LABELS: Record<string, string> = {
 
 export function Lobby({
   isConnected, roomId, roomSync, myId, roomError,
-  onCreateRoom, onJoinRoom, onReady, onUnready, onKick, onDissolve, onStart,
+  onCreateRoom, onJoinRoom, onReady, onUnready, onKick, onDissolve, onStart, onLeaveRoom,
 }: LobbyProps) {
   const [inputRoomId, setInputRoomId] = useState('');
 
@@ -101,6 +102,7 @@ export function Lobby({
             {isOwner && allReady && (
               <button className="lobby-btn start-btn" onClick={onStart}>开始游戏</button>
             )}
+            <button className="lobby-btn" onClick={onLeaveRoom}>退出房间</button>
             {isOwner && (
               <button className="lobby-btn dissolve-owner-btn" onClick={onDissolve}>解散房间</button>
             )}
