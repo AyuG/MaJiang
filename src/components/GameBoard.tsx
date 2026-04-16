@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import type { ClientGameState } from '@/types';
 import { PlayerArea } from './PlayerArea';
 import { DiscardPool } from './DiscardPool';
@@ -12,7 +13,6 @@ interface GameBoardProps {
   roomId?: string;
   onTileClick: (tileId: number) => void;
   onVoteDissolve: () => void;
-  /** Rendered above the self player's hand (for ActionBar) */
   children?: React.ReactNode;
 }
 
@@ -26,22 +26,39 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
   const lastDrawnTileId = gameState.lastDrawnTileId ?? undefined;
   const autoPlayers = gameState.autoPlayPlayerIds || [];
 
+  // Two-click discard: first click selects, second click confirms
+  const [selectedTileId, setSelectedTileId] = useState<number | null>(null);
+
+  // Clear selection when game state changes (new turn, phase change, etc.)
+  useEffect(() => {
+    setSelectedTileId(null);
+  }, [gameState.turnCount, gameState.phase, gameState.currentPlayerIndex]);
+
+  const handleTileClick = (tileId: number) => {
+    if (selectedTileId === tileId) {
+      // Second click on same tile → confirm discard
+      onTileClick(tileId);
+      setSelectedTileId(null);
+    } else {
+      // First click → select tile (show bounce animation)
+      setSelectedTileId(tileId);
+    }
+  };
+
   return (
     <div className="game-layout">
-      {/* Top header bar */}
       <div className="game-header">
         {roomId && <span className="room-code">房间: {roomId}</span>}
-        <span>牌墙: {gameState.wallCount}张</span>
-        <span>庄家: {SEAT_LABELS[gameState.dealerIndex]}</span>
+        <span>牌墙: {gameState.wallCount}</span>
+        <span>庄: {SEAT_LABELS[gameState.dealerIndex]}</span>
         <span>第{gameState.roundNumber ?? 1}局 回合:{gameState.turnCount}</span>
         <span className="current-turn-header">
-          ▶ {currentIdx === myIndex ? '你' : SEAT_LABELS[currentIdx]}出牌
+          ▶ {currentIdx === myIndex ? '你' : SEAT_LABELS[currentIdx]}
         </span>
-        {autoPlayers.length > 0 && <span className="autopilot-indicator">托管: {autoPlayers.length}人</span>}
-        <button className="dissolve-btn" onClick={onVoteDissolve}>投票解散</button>
+        {autoPlayers.length > 0 && <span className="autopilot-indicator">托管:{autoPlayers.length}</span>}
+        <button className="dissolve-btn" onClick={onVoteDissolve}>解散</button>
       </div>
 
-      {/* Game board */}
       <div className="game-board">
         <div className="board-top">
           <PlayerArea player={gameState.players[topIdx]} isSelf={false}
@@ -75,7 +92,6 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
           </div>
         </div>
 
-        {/* Bottom (self): discard → action bar → hand */}
         <div className="board-bottom">
           <div className="player-discard-area">
             <DiscardPool tiles={gameState.players[selfIdx].discardPool} />
@@ -84,7 +100,8 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
           <PlayerArea player={gameState.players[selfIdx]} isSelf={true} tiles={myHand}
             seatLabel={SEAT_LABELS[selfIdx]} isDealer={selfIdx === gameState.dealerIndex}
             isCurrent={selfIdx === currentIdx} lastDrawnTileId={lastDrawnTileId}
-            onTileClick={onTileClick}
+            selectedTileId={selectedTileId}
+            onTileClick={handleTileClick}
             isAutoPilot={autoPlayers.includes(gameState.players[selfIdx].id)} />
         </div>
       </div>

@@ -24,10 +24,11 @@ interface HandDisplayProps {
   tiles: Tile[];
   isSelf: boolean;
   lastDrawnTileId?: number;
+  selectedTileId?: number | null;
   onTileClick?: (tileId: number) => void;
 }
 
-export function HandDisplay({ tiles, isSelf, lastDrawnTileId, onTileClick }: HandDisplayProps) {
+export function HandDisplay({ tiles, isSelf, lastDrawnTileId, selectedTileId, onTileClick }: HandDisplayProps) {
   if (!isSelf) {
     return <span className="hand-hidden">手牌: {tiles.length}张</span>;
   }
@@ -38,10 +39,17 @@ export function HandDisplay({ tiles, isSelf, lastDrawnTileId, onTileClick }: Han
     <div className="hand-display">
       {sorted.map((tile) => {
         const isLastDrawn = tile.id === lastDrawnTileId;
+        const isSelected = tile.id === selectedTileId;
+        const classes = [
+          'tile-btn',
+          isLastDrawn && !isSelected ? 'tile-last-drawn tile-bounce' : '',
+          isSelected ? 'tile-selected tile-bounce' : '',
+        ].filter(Boolean).join(' ');
+
         return (
           <button
             key={tile.id}
-            className={`tile-btn${isLastDrawn ? ' tile-last-drawn tile-bounce' : ''}`}
+            className={classes}
             onClick={() => onTileClick?.(tile.id)}
             title={`ID:${tile.id}`}
           >

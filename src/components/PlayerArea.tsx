@@ -21,13 +21,14 @@ interface PlayerAreaProps {
   isDealer: boolean;
   isCurrent: boolean;
   lastDrawnTileId?: number;
+  selectedTileId?: number | null;
   onTileClick?: (tileId: number) => void;
   isAutoPilot?: boolean;
 }
 
 export function PlayerArea({
   player, isSelf, tiles, seatLabel, isDealer, isCurrent,
-  lastDrawnTileId, onTileClick, isAutoPilot = false,
+  lastDrawnTileId, selectedTileId, onTileClick, isAutoPilot = false,
 }: PlayerAreaProps) {
   const statusIcon = player.isConnected ? '🟢' : '🔴';
   const dealerMark = isDealer ? ' [庄]' : '';
@@ -40,7 +41,7 @@ export function PlayerArea({
         {isAutoPilot && <span className="autopilot-badge"> 🤖托管</span>}
       </div>
       {isSelf && tiles ? (
-        <HandDisplay tiles={tiles} isSelf={true} lastDrawnTileId={lastDrawnTileId} onTileClick={onTileClick} />
+        <HandDisplay tiles={tiles} isSelf={true} lastDrawnTileId={lastDrawnTileId} selectedTileId={selectedTileId} onTileClick={onTileClick} />
       ) : (
         <span className="hand-hidden">手牌: {player.handCount}张</span>
       )}
