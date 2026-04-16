@@ -555,6 +555,30 @@
     - 新摸牌态金色边框 + 浅金底色
     - _需求: 22.3_
 
+- [x] 24. v1.3.2 深度视觉重构
+  - [x] 24.1 Meld 组件实体化
+    - MeldDisplay 从文字改为 Tile 组件渲染
+    - 碰/杠来源牌横放（rotate 90deg）标记
+    - 暗杠 4 张面朝下
+    - _需求: 22.3_
+
+  - [x] 24.2 River 镜像对齐与动态换行
+    - 右侧弃牌区移至靠近中心（与左侧对称）
+    - 水平河使用 auto-fill + clamp 动态列数
+    - 垂直河 3 列（移动端 2 列）
+    - _需求: 22.2_
+
+  - [x] 24.3 中央牌墙组件
+    - WallDisplay 组件：进度条 + 墩数文字
+    - 摸牌时视觉递减（CSS transition）
+    - _需求: 22.1_
+
+  - [x] 24.4 5 行布局重构
+    - T-felt 改为 flex column 5 行：top-edge / top-rv / mid / bot-rv / (empty)
+    - mid 内 5 列：left-edge / left-rv / center / right-rv / right-edge
+    - 碰杠严格在 edge 区域，弃牌严格在 rv 区域
+    - _需求: 22.1, 22.2_
+
 ## 说明
 
 - 标记 `*` 的子任务为可选测试任务，可跳过以加速 MVP 开发
