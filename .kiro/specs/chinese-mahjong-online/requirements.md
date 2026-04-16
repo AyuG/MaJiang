@@ -277,3 +277,26 @@
 
 1. WHEN Player 摸到新牌时，THE Client_UI SHALL 对该牌应用闪烁加上下抖动的动画效果，持续约 4.5 秒（3 次循环）
 2. THE Client_UI SHALL 以金色边框和金色文字高亮显示最近摸到的牌，与其他手牌形成视觉区分
+
+### 需求 20：移动端 H5 适配
+
+**用户故事：** 作为手机玩家，我希望游戏界面能适配手机屏幕，无需上下滑动即可完整显示游戏内容。
+
+#### 验收标准
+
+1. THE Client_UI SHALL 设置 viewport meta 标签，禁止用户缩放，确保移动端正确渲染
+2. THE Client_UI SHALL 使用响应式布局，在 768px 以下屏幕宽度时自动缩小字体、间距和牌面尺寸
+3. THE Client_UI SHALL 压缩游戏棋盘中间区域的空闲面积，使四位玩家区域紧凑排列
+4. THE Client_UI SHALL 在 480px 以下屏幕宽度时进一步缩小牌面和按钮尺寸
+5. THE Client_UI SHALL 使用 `100dvh`（动态视口高度）确保在移动浏览器中不出现地址栏遮挡
+
+### 需求 21：出牌二次确认
+
+**用户故事：** 作为玩家，我希望出牌需要二次确认，以避免误操作。
+
+#### 验收标准
+
+1. WHEN Player 第一次点击手牌中的某张牌时，THE Client_UI SHALL 将该牌标记为选中状态，显示红色边框和上下跳动闪烁动画
+2. WHEN Player 第二次点击同一张已选中的牌时，THE Client_UI SHALL 执行出牌操作
+3. WHEN Player 点击另一张不同的牌时，THE Client_UI SHALL 取消之前的选中状态，将新点击的牌设为选中
+4. WHEN 游戏状态发生变化（回合切换、阶段变化）时，THE Client_UI SHALL 自动清除选中状态
