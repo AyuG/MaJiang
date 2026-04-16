@@ -169,3 +169,72 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   .action-btn{padding:.1rem .35rem;font-size:.7rem}
   .score-panel{bottom:calc(3rem + 3px)}
 }
+
+/* ═══ TILE FACE RENDERING ═══ */
+
+/* Base tile face container */
+.tf{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;overflow:hidden}
+.tf-svg{width:80%;height:80%}
+
+/* 万子 (Wan) — red number + 萬 */
+.tf-wan{gap:0}
+.tf-wan-num{color:#c53030;font-weight:900;line-height:1;font-size:1.1em}
+.tf-wan-char{color:#c53030;font-weight:700;line-height:1;font-size:.65em}
+
+/* 筒子 (Tong) — circle grid */
+.tf-tong{display:grid;gap:0;padding:1px;width:100%;height:100%;align-content:center;justify-items:center}
+.tf-tong1{display:flex;align-items:center;justify-content:center}
+.tf-circle{width:auto;height:auto}
+.tf-tong-2{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+.tf-tong-2 .tf-circle{width:60%;height:auto}
+.tf-tong-3{grid-template-columns:1fr;grid-template-rows:1fr 1fr 1fr}
+.tf-tong-3 .tf-circle{width:55%;height:auto}
+.tf-tong-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.tf-tong-4 .tf-circle{width:80%;height:auto}
+.tf-tong-5{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr}
+.tf-tong-5 .tf-circle{width:70%;height:auto}
+.tf-tong-5 .tf-circle:nth-child(5){grid-column:1/3}
+.tf-tong-6{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr}
+.tf-tong-6 .tf-circle{width:70%;height:auto}
+.tf-tong-7{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr 1fr}
+.tf-tong-7 .tf-circle{width:65%;height:auto}
+.tf-tong-7 .tf-circle:nth-child(7){grid-column:1/3}
+.tf-tong-8{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr 1fr}
+.tf-tong-8 .tf-circle{width:65%;height:auto}
+.tf-tong-9{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr}
+.tf-tong-9 .tf-circle{width:85%;height:auto}
+
+/* 条子 (Tiao) — bamboo grid */
+.tf-tiao{display:grid;gap:0;padding:1px;width:100%;height:100%;align-content:center;justify-items:center}
+.tf-tiao1{display:flex;align-items:center;justify-content:center}
+.tf-bamboo{width:auto;height:auto}
+.tf-tiao-2{grid-template-columns:1fr 1fr;grid-template-rows:1fr}
+.tf-tiao-2 .tf-bamboo{width:50%;height:90%}
+.tf-tiao-3{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr}
+.tf-tiao-3 .tf-bamboo{width:60%;height:90%}
+.tf-tiao-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.tf-tiao-4 .tf-bamboo{width:50%;height:80%}
+.tf-tiao-5{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr}
+.tf-tiao-5 .tf-bamboo{width:50%;height:80%}
+.tf-tiao-5 .tf-bamboo:nth-child(5){grid-column:1/3}
+.tf-tiao-6{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr}
+.tf-tiao-6 .tf-bamboo{width:55%;height:80%}
+.tf-tiao-7{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr}
+.tf-tiao-7 .tf-bamboo{width:55%;height:80%}
+.tf-tiao-7 .tf-bamboo:nth-child(7){grid-column:2/3}
+.tf-tiao-8{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr 1fr}
+.tf-tiao-8 .tf-bamboo{width:50%;height:75%}
+.tf-tiao-9{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr}
+.tf-tiao-9 .tf-bamboo{width:55%;height:80%}
+
+/* 风牌 (Feng) — blue character */
+.tf-feng{display:flex;align-items:center;justify-content:center}
+.tf-feng-char{color:#1a5fb4;font-weight:900;font-size:1.3em;line-height:1}
+
+/* 字牌 (Zi) */
+.tf-zi{display:flex;align-items:center;justify-content:center}
+.tf-zhong{color:#c53030;font-weight:900;font-size:1.3em;line-height:1}
+.tf-fa{color:#2a7f2a;font-weight:900;font-size:1.3em;line-height:1}
+
+/* Tile back (face down) — solid green */
+.tile-back{width:100%;height:100%;background:#1a6b3a;border-radius:2px;background-image:linear-gradient(135deg,rgba(255,255,255,.08) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.08) 50%,rgba(255,255,255,.08) 75%,transparent 75%);background-size:6px 6px}

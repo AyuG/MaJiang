@@ -1,7 +1,7 @@
 'use client';
 
 import type { Tile as TileType } from '@/types';
-import { formatTile } from '@/engine/tile-formatter';
+import { TileFace } from './TileFace';
 
 interface TileProps {
   tile: TileType;
@@ -13,34 +13,31 @@ interface TileProps {
 }
 
 /**
- * Abstract Tile component.
- * Currently renders text; style reserves background-image interface
- * for future graphical tile assets.
+ * Mahjong tile component with graphical face rendering.
+ * - Front: SVG/styled patterns matching traditional tile art
+ * - Back: solid green (face down)
  */
 export function Tile({ tile, isSelected, isLastDrawn, isFaceDown, size = 'md', onClick }: TileProps) {
-  const sizeClass = `tile-${size}`;
   const classes = [
     'tile',
-    sizeClass,
+    `tile-${size}`,
     isSelected ? 'tile-selected tile-bounce' : '',
     isLastDrawn && !isSelected ? 'tile-last-drawn tile-bounce' : '',
     isFaceDown ? 'tile-facedown' : '',
     onClick ? 'tile-clickable' : '',
   ].filter(Boolean).join(' ');
 
-  // Future: style={{ backgroundImage: `url(/tiles/${tile.suit}_${tile.value}.png)` }}
   return (
     <div className={classes} onClick={onClick} data-tile-id={tile.id}>
-      {isFaceDown ? '🀫' : formatTile(tile)}
+      {isFaceDown ? (
+        <div className="tile-back" />
+      ) : (
+        <TileFace tile={tile} />
+      )}
     </div>
   );
 }
 
-/** Render a row of face-down tiles (for opponents) */
-export function TileBack({ count, size = 'sm' }: { count: number; size?: 'sm' | 'md' }) {
-  return (
-    <span className="tile-back-row">
-      {count}张
-    </span>
-  );
+export function TileBack({ count }: { count: number }) {
+  return <span className="tile-back-row">{count}张</span>;
 }
