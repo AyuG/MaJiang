@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 
 interface ScoreLogEntry {
   round: number;
@@ -13,30 +13,52 @@ interface ScoreLogEntry {
 interface ScorePanelProps {
   myPlayerId: string;
   scoreLog: ScoreLogEntry[];
+  /** Map of playerId → nickname for display */
+  nicknames?: Record<string, string>;
 }
 
-export function ScorePanel({ myPlayerId, scoreLog }: ScorePanelProps) {
-  const [isOpen, setIsOpen] = useState(true);
+export function ScorePanel({ myPlayerId, scoreLog, nicknames }: ScorePanelProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [pos, setPos] = useState({ x: 8, y: 8 });
+  const dragging = useRef(false);
+  const offset = useRef({ x: 0, y: 0 });
+
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    dragging.current = true;
+    offset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, [pos]);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragging.current) return;
+    setPos({ x: e.clientX - offset.current.x, y: e.clientY - offset.current.y });
+  }, []);
+
+  const onPointerUp = useCallback(() => { dragging.current = false; }, []);
+
+  const getSeatNick = (s: { playerId: string; seat: string }) => {
+    const nick = nicknames?.[s.playerId];
+    return nick ? `${s.seat}(${nick})` : s.seat;
+  };
 
   if (scoreLog.length === 0) return null;
 
   return (
-    <div className="score-panel">
-      <button className="score-toggle" onClick={() => setIsOpen(!isOpen)}>
-        📊 {isOpen ? '收起' : `积分(${scoreLog.length})`}
+    <div className="sp-float" style={{ left: pos.x, bottom: pos.y }}
+      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+      <button className="sp-btn" onClick={() => setIsOpen(!isOpen)}>
+        📊{isOpen ? '收起' : scoreLog.length}
       </button>
       {isOpen && (
-        <div className="score-panel-body">
-          {scoreLog.map((entry, idx) => (
-            <div key={idx} className="score-log-entry">
-              {entry.roomId && <span className="score-log-room">[{entry.roomId}]</span>}
-              <span className="score-log-round">第{entry.round}局</span>
-              <span className="score-log-result">{entry.result === 'win' ? '胡' : '流'}</span>
-              {entry.scores.filter((s) => s.delta !== 0).map((s) => (
-                <span key={s.playerId} className="score-log-delta" style={{
-                  color: s.delta > 0 ? '#4caf50' : '#ff6b6b',
-                }}>
-                  {s.seat}{s.playerId === myPlayerId ? '(你)' : ''}:{s.delta > 0 ? '+' : ''}{s.delta}
+        <div className="sp-body">
+          {scoreLog.map((e, i) => (
+            <div key={i} className="sp-row">
+              {e.roomId && <span className="sp-room">[{e.roomId}]</span>}
+              <span className="sp-rd">第{e.round}局</span>
+              <span className="sp-res">{e.result === 'win' ? '胡' : '流'}</span>
+              {e.scores.filter((s) => s.delta !== 0).map((s) => (
+                <span key={s.playerId} className="sp-d" style={{ color: s.delta > 0 ? '#4ade80' : '#f87171' }}>
+                  {getSeatNick(s)}:{s.delta > 0 ? '+' : ''}{s.delta}
                 </span>
               ))}
             </div>

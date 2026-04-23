@@ -27,16 +27,20 @@ const SEAT_LABELS: Record<string, string> = {
 export function Lobby({
   isConnected, roomId, roomSync, myId, myNickname, roomError,
   onCreateRoom, onJoinRoom, onReady, onUnready, onKick, onDissolve, onStart, onLeaveRoom,
-}: LobbyProps) {
+  onChangeNickname,
+}: LobbyProps & { onChangeNickname?: (name: string) => void }) {
   const [inputRoomId, setInputRoomId] = useState('');
   const [copied, setCopied] = useState(false);
+  const [editingNick, setEditingNick] = useState(false);
+  const [nickInput, setNickInput] = useState(myNickname);
+  const NICK_RE = /^[a-zA-Z0-9\u4e00-\u9fa5]{1,8}$/;
 
   // Room ID: 6 chars, uppercase A-Z (no I/O) + 2-9
-  const ROOM_ID_REGEX = /^[A-HJKLMNP-Z2-9]{0,6}$/;
-  const isValidRoomId = inputRoomId.length === 6 && ROOM_ID_REGEX.test(inputRoomId);
+  const ROOM_ID_REGEX = /^[A-HJKLMNP-Z2-9]{0,4}$/;
+  const isValidRoomId = inputRoomId.length === 4 && ROOM_ID_REGEX.test(inputRoomId);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.toUpperCase().replace(/[^A-HJKLMNP-Z2-9]/g, '').slice(0, 6);
+    const val = e.target.value.toUpperCase().replace(/[^A-HJKLMNP-Z2-9]/g, '').slice(0, 4);
     setInputRoomId(val);
   };
 
@@ -50,15 +54,37 @@ export function Lobby({
       <h2>大厅</h2>
       <div className="connection-status">
         {isConnected ? '🟢 已连接' : '🔴 未连接'}
-        {myNickname && <span style={{ marginLeft: '.5rem', color: '#e8b339' }}>{myNickname}</span>}
+        {' '}
+        {editingNick ? (
+          <span>
+            <input type="text" value={nickInput} maxLength={8}
+              onChange={(e) => setNickInput(e.target.value)}
+              className="room-input" style={{ width: '6rem', fontSize: '.8rem' }} />
+            <button className="lobby-btn" style={{ fontSize: '.7rem', padding: '.1rem .3rem', marginLeft: '.2rem' }}
+              disabled={!NICK_RE.test(nickInput)}
+              onClick={() => {
+                if (NICK_RE.test(nickInput) && onChangeNickname) {
+                  onChangeNickname(nickInput);
+                  setEditingNick(false);
+                }
+              }}>确定</button>
+            <button className="lobby-btn" style={{ fontSize: '.7rem', padding: '.1rem .3rem', marginLeft: '.2rem' }}
+              onClick={() => { setNickInput(myNickname); setEditingNick(false); }}>取消</button>
+          </span>
+        ) : (
+          <span style={{ color: '#e8b339', cursor: iAmReady ? 'default' : 'pointer' }}
+            onClick={() => { if (!iAmReady) setEditingNick(true); }}>
+            {myNickname} {!iAmReady && '✏️'}
+          </span>
+        )}
       </div>
 
       {!roomId ? (
         <div className="lobby-actions">
           <button className="lobby-btn" onClick={onCreateRoom} disabled={!isConnected}>创建房间</button>
           <div className="join-section">
-            <input type="text" placeholder="6位房间号" value={inputRoomId}
-              onChange={handleInputChange} className="room-input" maxLength={6} />
+            <input type="text" placeholder="4位房间号" value={inputRoomId}
+              onChange={handleInputChange} className="room-input" maxLength={4} />
             <button className="lobby-btn" onClick={() => onJoinRoom(inputRoomId)}
               disabled={!isConnected || !isValidRoomId}>加入房间</button>
           </div>
@@ -69,9 +95,24 @@ export function Lobby({
           <div className="room-id-display">
             房间号: {roomId}
             <button className="lobby-btn" style={{ marginLeft: '.5rem', fontSize: '.7rem', padding: '.15rem .4rem' }}
-              onClick={() => {
+              onClick={async () => {
                 const url = `${window.location.origin}?room=${roomId}`;
-                navigator.clipboard.writeText(url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+                try {
+                  await navigator.clipboard.writeText(url);
+                  setCopied(true);
+                } catch {
+                  // Fallback for mobile/insecure contexts
+                  const ta = document.createElement('textarea');
+                  ta.value = url;
+                  ta.style.position = 'fixed';
+                  ta.style.opacity = '0';
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand('copy');
+                  document.body.removeChild(ta);
+                  setCopied(true);
+                }
+                setTimeout(() => setCopied(false), 2000);
               }}>
               {copied ? '✅ 已复制' : '📋 邀请链接'}
             </button>

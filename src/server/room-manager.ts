@@ -56,7 +56,7 @@ export class RoomManager {
   // ── Task 10.1: Core room management ──────────────────
 
   createRoom(playerId: string): string {
-    const roomId = generateRoomId();
+    const roomId = generateRoomId(this.rooms);
     const room: RoomState = {
       roomId,
       players: [{ id: playerId, seat: 'east', isReady: false, isConnected: true }],
@@ -402,11 +402,19 @@ export class RoomManager {
   }
 }
 
-/** Generate a short room ID */
-function generateRoomId(): string {
+/** Generate a unique 4-char room ID with collision check */
+function generateRoomId(existingRooms: Map<string, any>): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (let attempt = 0; attempt < 100; attempt++) {
+    let id = '';
+    for (let i = 0; i < 4; i++) {
+      id += chars[Math.floor(Math.random() * chars.length)];
+    }
+    if (!existingRooms.has(id)) return id;
+  }
+  // Fallback: 5 chars if 4-char space exhausted
   let id = '';
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 5; i++) {
     id += chars[Math.floor(Math.random() * chars.length)];
   }
   return id;

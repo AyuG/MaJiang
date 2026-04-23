@@ -38,6 +38,7 @@ export default function Home() {
     pass,
     voteDissolve,
     leaveRoom,
+    changeNickname,
   } = useMahjongSocket();
 
   const handleLeaveRoom = useCallback(() => {
@@ -56,7 +57,7 @@ export default function Home() {
     if (!isConnected || localRoomId || roomId) return;
     const params = new URLSearchParams(window.location.search);
     const inviteRoom = params.get('room');
-    if (inviteRoom && inviteRoom.length === 6) {
+    if (inviteRoom && inviteRoom.length >= 4) {
       joinRoom(inviteRoom);
       // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
@@ -226,6 +227,7 @@ export default function Home() {
         onDissolve={dissolveRoom}
         onStart={startGame}
         onLeaveRoom={handleLeaveRoom}
+        onChangeNickname={changeNickname}
       />
       {diceResult && !gameState && (
         <div className="dice-overlay">

@@ -150,16 +150,17 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
 .dice-player{padding:.2rem .5rem;background:#1a1f2b;border:1px solid #2d3748;color:#d4d4d4;border-radius:4px}
 .dice-winner{border-color:#e8b339;color:#e8b339;font-weight:bold;animation:bounce 1s ease-in-out 2}
 
-/* ═══ SCORE PANEL (z-40, above hand area with padding) ═══ */
-.score-panel{position:fixed;left:4px;bottom:calc(4.5rem + 6px);z-index:40;background:rgba(17,24,39,.92);border:1px solid #2d3748;border-radius:4px;max-width:230px;font-size:.6rem;backdrop-filter:blur(3px)}
-.score-toggle{display:block;width:100%;padding:.15rem .3rem;background:transparent;color:#63b3ed;border:none;cursor:pointer;text-align:left;font-size:.62rem}
-.score-toggle:hover{background:#1f2937}
-.score-panel-body{padding:.15rem .3rem;max-height:16vh;overflow-y:auto}
-.score-log-entry{display:flex;flex-wrap:wrap;gap:.2rem;padding:.06rem 0;border-bottom:1px solid #1f2937}
-.score-log-room{color:#63b3ed;font-size:.5rem}
-.score-log-round{color:#e8b339;font-weight:bold}
-.score-log-result{color:#9ca3af}
-.score-log-delta{font-size:.52rem}
+/* ═══ SCORE PANEL (draggable floating) ═══ */
+.sp-float{position:fixed;z-index:40;touch-action:none;cursor:grab}
+.sp-float:active{cursor:grabbing}
+.sp-btn{padding:.2rem .5rem;font-size:.75rem;background:rgba(17,24,39,.92);color:#63b3ed;border:1px solid #2d3748;border-radius:4px;cursor:pointer;backdrop-filter:blur(3px)}
+.sp-btn:hover{background:#1f2937}
+.sp-body{margin-top:4px;background:rgba(17,24,39,.95);border:1px solid #2d3748;border-radius:4px;padding:.25rem .4rem;max-height:25vh;overflow-y:auto;max-width:260px;font-size:.65rem;backdrop-filter:blur(3px)}
+.sp-row{display:flex;flex-wrap:wrap;gap:.2rem;padding:.06rem 0;border-bottom:1px solid #1f2937}
+.sp-room{color:#63b3ed;font-size:.55rem}
+.sp-rd{color:#e8b339;font-weight:bold}
+.sp-res{color:#9ca3af}
+.sp-d{font-size:.6rem}
 
 /* ═══ RESPONSIVE ═══ */
 @media(max-width:768px){
@@ -174,6 +175,7 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   .wall-bar{width:50px;height:5px}
   .wall-text{font-size:.55rem}
   .f-left-edge,.f-right-edge{min-width:34px}
+  .sp-body{max-width:200px;font-size:.55rem}
   .meld-river-row{gap:3px}
   .meld-river-col{gap:2px}
 }

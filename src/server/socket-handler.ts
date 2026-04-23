@@ -156,15 +156,59 @@ export function setupSocketHandlers(
     }
   }
 
+  // Nickname storage: playerId → nickname
+  const nicknameMap = new Map<string, string>();
+
+  /** Force-remove a player from any room they're currently in */
+  function cleanupPlayerFromOldRoom(playerId: string, currentSocketId: string) {
+    for (const [sid, m] of socketMap.entries()) {
+      if (m.playerId === playerId && sid !== currentSocketId) {
+        const room = roomManager.getRoom(m.roomId);
+        if (room && room.status === 'waiting') {
+          roomManager.leaveRoom(m.roomId, playerId);
+          broadcastRoomSync(m.roomId);
+        }
+        const s = io.sockets.sockets.get(sid);
+        if (s) s.leave(m.roomId);
+        socketMap.delete(sid);
+      }
+    }
+  }
+
   io.on('connection', (socket: Socket<ClientEvents, ServerEvents>) => {
 
-    // Extract persistent player ID and nickname from auth handshake
     const persistentId = (socket.handshake.auth as any)?.playerId || socket.id;
     const persistentNickname = (socket.handshake.auth as any)?.nickname || persistentId.slice(0, 8);
+
+    // Store/restore nickname
+    if (!nicknameMap.has(persistentId)) {
+      nicknameMap.set(persistentId, persistentNickname);
+    }
+
+    // ── Force cleanup: if this player has a stale socket mapping, remove it ──
+    for (const [oldSid, m] of socketMap.entries()) {
+      if (m.playerId === persistentId && oldSid !== socket.id) {
+        socketMap.delete(oldSid);
+      }
+    }
+
+    // ── Nickname change ──
+    socket.on('room:change-nickname' as any, (name: string) => {
+      if (typeof name === 'string' && /^[a-zA-Z0-9\u4e00-\u9fa5]{1,8}$/.test(name)) {
+        nicknameMap.set(persistentId, name);
+        // Broadcast updated sync if in a room
+        const mapping = socketMap.get(socket.id);
+        if (mapping) broadcastRoomSync(mapping.roomId);
+      }
+    });
 
     // ── Room: create ─────────────────────────────────
     socket.on('room:create', () => {
       const playerId = persistentId;
+
+      // Force leave any existing room first
+      cleanupPlayerFromOldRoom(playerId, socket.id);
+
       const roomId = roomManager.createRoom(playerId);
       roomManager.setReady(roomId, playerId);
       socketMap.set(socket.id, { roomId, playerId });
@@ -176,6 +220,10 @@ export function setupSocketHandlers(
     // ── Room: join ───────────────────────────────────
     socket.on('room:join', async (roomId: string) => {
       const playerId = persistentId;
+
+      // Force leave any existing room first
+      cleanupPlayerFromOldRoom(playerId, socket.id);
+
       const room = roomManager.getRoom(roomId);
 
       if (!room) {

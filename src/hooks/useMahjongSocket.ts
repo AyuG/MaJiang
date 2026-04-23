@@ -1,13 +1,22 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useSocket } from './useSocket';
 import { useGameState } from './useGameState';
 
 export function useMahjongSocket() {
-  const { socket, isConnected, playerId, nickname } = useSocket();
+  const { socket, isConnected, playerId, nickname: initialNickname } = useSocket();
+  const [nickname, setNicknameState] = useState(initialNickname);
   const { gameState, roomId, availableActions, gangOptions, remainingSeconds, winResult, isDraw, diceResult, scoreLog } =
     useGameState(socket, playerId);
+
+  const changeNickname = useCallback((name: string) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mj_nickname', name);
+    }
+    setNicknameState(name);
+    socket?.emit('room:change-nickname' as any, name);
+  }, [socket]);
 
   const createRoom = useCallback(() => {
     socket?.emit('room:create');
@@ -118,5 +127,6 @@ export function useMahjongSocket() {
     voteDissolve,
     voteDissolveReply,
     leaveRoom,
+    changeNickname,
   };
 }
