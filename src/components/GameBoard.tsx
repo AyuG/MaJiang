@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import type { ClientGameState } from '@/types';
 import { Tile } from './Tile';
 import { MeldDisplay } from './MeldDisplay';
-import { WallDisplay } from './WallDisplay';
+import { Compass } from './Compass';
 import { audioService } from '@/services/audioService';
 
 const SEATS = ['东', '南', '西', '北'];
@@ -83,7 +83,6 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
     <div className="T">
       <header className="T-hd">
         {roomId && <span className="hd-r">{roomId}</span>}
-        <span>第{gameState.roundNumber ?? 1}局 R{gameState.turnCount}</span>
         <span className={selfI === cur ? 'hd-my' : ''}>▶{cur === myIdx ? '你' : SEATS[cur]}</span>
         <button className="hd-b" onClick={onVoteDissolve}>解散</button>
       </header>
@@ -109,7 +108,14 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
             </div>
           </div>
 
-          <div className="f-ctr"><WallDisplay wallCount={gameState.wallCount} /></div>
+          <div className="f-ctr">
+            <Compass
+              seatOrder={[selfI, rightI, topI, leftI]}
+              currentSeatIndex={cur}
+              wallCount={gameState.wallCount}
+              roundNumber={gameState.roundNumber ?? 1}
+            />
+          </div>
 
           {/* Right: mirror of left — river+meld from center outward (top-to-bottom start) */}
           <div className="f-right-rv">

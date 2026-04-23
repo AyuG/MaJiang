@@ -231,16 +231,9 @@ export class GameController {
     let winnerIndex: number | null = null;
 
     if (isWin) {
-      // Winner is the player with the highest score delta this round
-      // (the one whose score increased the most)
-      let maxScore = -Infinity;
-      for (let i = 0; i < state.players.length; i++) {
-        if (state.players[i].score > maxScore) {
-          maxScore = state.players[i].score;
-          winnerIndex = i;
-          winnerId = state.players[i].id;
-        }
-      }
+      // The winner is the current player who declared hu
+      winnerIndex = state.currentPlayerIndex;
+      winnerId = state.players[winnerIndex]?.id;
     }
 
     // Log score to Redis
