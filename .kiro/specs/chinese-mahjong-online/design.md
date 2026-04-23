@@ -45,12 +45,29 @@ graph TB
 
 ### 分层设计
 
-系统分为四层：
+系统分为五层：
 
-1. **传输层**：Socket.io 负责客户端与服务端的实时双向通信
-2. **控制层**：RoomManager 管理房间生命周期，GameController 协调游戏流程
-3. **引擎层**：StateMachine 管理状态流转，MahjongEngine 执行纯游戏逻辑，RuleProvider 提供可插拔规则
-4. **持久层**：Redis 存储游戏状态、操作日志和房间信息
+1. **传输层**：Socket.io 负责客户端与服务端的实时双向通信，auth 握手传递 playerId/nickname
+2. **认证层**：基于 localStorage 的轻量级持久化身份（Persistent_ID），无需登录注册
+3. **控制层**：RoomManager 管理房间生命周期，GameController 协调游戏流程
+4. **引擎层**：StateMachine 管理状态流转，MahjongEngine 执行纯游戏逻辑，RuleProvider 提供可插拔规则
+5. **持久层**：Redis 存储游戏状态、操作日志、分值日志和房间信息
+
+### 认证流程
+
+```
+客户端 localStorage → mj_player_id + mj_nickname
+    ↓
+Socket.io auth: { playerId, nickname }
+    ↓
+服务端 persistentId = handshake.auth.playerId
+    ↓
+nicknameMap: playerId → nickname（内存映射）
+    ↓
+房间/游戏中所有 player.id 都是持久 ID
+    ↓
+重连时 playerId 精确匹配 → 恢复原座位（无需 ID 替换）
+```
 
 ### 状态机流转
 
@@ -242,6 +259,11 @@ interface ClientEvents {
   'room:create': () => void;
   'room:join': (roomId: string) => void;
   'room:ready': () => void;
+  'room:unready': () => void;
+  'room:change-nickname': (nickname: string) => void;
+  'room:kick': (targetId: string) => void;
+  'room:dissolve': () => void;
+  'room:start': () => void;
   'game:discard': (tileId: number) => void;
   'game:peng': () => void;
   'game:gang': (type: 'ming' | 'an' | 'bu', tileId?: number) => void;
@@ -256,17 +278,16 @@ interface ServerEvents {
   'room:created': (roomId: string) => void;
   'room:joined': (playerInfo: PlayerInfo) => void;
   'room:player-ready': (playerId: string) => void;
+  'room:sync': (data: RoomSyncData) => void;
+  'room:error': (message: string) => void;
+  'room:vote-dissolve-request': (initiator: string) => void;
+  'room:vote-dissolve-rejected': () => void;
+  'room:dissolved': (scoreHistory?: ScoreHistory[]) => void;
+  'game:dice-result': (data: DiceResultData) => void;
   'game:started': (initialState: ClientGameState) => void;
   'game:state-update': (state: ClientGameState) => void;
-  'game:your-turn': (validActions: string[]) => void;
-  'game:awaiting': (options: AwaitingOptions) => void;
-  'game:win': (result: GameResult) => void;
-  'game:draw': () => void;
   'game:paused': (disconnectedPlayer: string) => void;
   'game:resumed': () => void;
-  'room:vote-dissolve-request': (initiator: string) => void;
-  'room:dissolved': () => void;
-  'timer:tick': (seconds: number) => void;
 }
 ```
 

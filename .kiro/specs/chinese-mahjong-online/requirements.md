@@ -27,7 +27,7 @@
 - **Hai_Di_Lao_Yue**: 海底捞月，摸取牌墙最后一张牌时完成胡牌
 - **Seed**: 随机种子，用于洗牌算法的确定性随机数生成，支持复盘
 - **Redis_Store**: Redis 持久化层，存储游戏房间状态、玩家手牌和桌面信息
-- **Client_UI**: 基于 React 的纯文字前端界面
+- **Client_UI**: 基于 React 的 2.5D 牌桌界面，使用 PNG 牌面素材（riichi-mahjong-tiles, CC0）和音效（mahjong-master, MIT）
 - **Score**: 分数，杠分和胡牌分的统计值，固定每次 5 分。杠分在游戏过程中累计记录，仅在胡牌时统一结算；流局时杠分清零不计算
 - **Qi_Dui**: 七对子，手牌由 7 组对子（每组 2 张相同牌）组成的合法胡牌牌型，不翻倍，按固定分值计算
 - **Vote_Dissolve**: 投票解散机制，发起方自动同意，其余在线玩家全部同意方可解散当前游戏，断线玩家默认同意
@@ -39,6 +39,10 @@
 - **Smart_Auto_Play**: 智能托管模式，当玩家断线或超时时，系统自动代替玩家进行操作。出牌时选择最孤立的牌（与手中其他牌关联度最低的牌），碰/杠响应阶段自动选择"过"，能胡时自动胡牌
 - **Score_Log**: 分值日志，按房间分类记录每局的分数变动，存储于 Redis 中，保留 7 天
 - **Auto_Ready**: 自动准备，玩家创建或加入房间时自动进入准备状态，可手动取消准备
+- **Persistent_ID**: 持久化玩家身份，基于 localStorage 的 mj_player_id，通过 Socket.io auth 握手传递，支持断线重连身份匹配
+- **Nickname**: 玩家昵称，随机生成中文昵称（形容词+名词），支持自定义修改（8 字符限制），准备后锁定
+- **Compass**: 中心方位块，紫色四方块显示東南西北（基于本地玩家视角），当前出牌方位闪烁，圆心显示牌墙剩余数
+- **Invite_Link**: 邀请链接，通过 URL 参数 ?room=XXXX 分享房间，打开后自动加入
 
 ## 需求
 
@@ -320,9 +324,9 @@
 
 #### 验收标准
 
-1. THE Client_UI SHALL 限制房间号输入为 6 位大写字母+数字（与系统生成的房间号格式一致）
+1. THE Client_UI SHALL 限制房间号输入为 4 位大写字母+数字（与系统生成的房间号格式一致），系统生成时包含碰撞检查
 2. THE Client_UI SHALL 自动过滤非法字符，仅允许 A-Z（排除 I/O）和 2-9
-3. WHEN 输入长度不足 6 位时，THE Client_UI SHALL 禁用"加入房间"按钮
+3. WHEN 输入长度不足 4 位时，THE Client_UI SHALL 禁用"加入房间"按钮
 
 ### 需求 24：退出房间
 
@@ -343,3 +347,46 @@
 1. THE Client_UI SHALL 包含 ErrorBoundary 组件，捕获所有 client-side 异常并显示恢复 UI
 2. WHEN Socket 断连后重新连接时，THE Client_UI SHALL 自动尝试重新加入上次所在的房间
 3. THE Game_Server SHALL 在检测到重连请求时，若房间存在断线席位，优先触发恢复流程
+
+### 需求 26：持久化玩家身份
+
+**用户故事：** 作为玩家，我希望刷新页面或断线重连后能自动恢复身份和游戏状态。
+
+#### 验收标准
+
+1. THE Client_UI SHALL 在 localStorage 中生成并存储唯一的 mj_player_id，格式为 p_ + 随机字符串
+2. WHEN Socket 连接建立时，THE Client_UI SHALL 通过 auth 握手将 playerId 和 nickname 传递给服务端
+3. THE Game_Server SHALL 使用 playerId（而非 socket.id）作为玩家唯一标识
+4. WHEN 玩家重连时，THE Game_Server SHALL 通过 playerId 匹配原座位，无需替换 ID
+
+### 需求 27：昵称系统
+
+**用户故事：** 作为玩家，我希望有一个可自定义的昵称，在房间和对局中显示。
+
+#### 验收标准
+
+1. THE Client_UI SHALL 在首次访问时随机生成中文昵称（形容词+名词组合），存储在 localStorage
+2. THE Client_UI SHALL 允许玩家在大厅修改昵称，限制 8 字符，正则 /^[a-zA-Z0-9\u4e00-\u9fa5]{1,8}$/
+3. WHEN Player 处于准备状态时，THE Client_UI SHALL 锁定昵称不可修改
+4. THE Game_Server SHALL 在内存中维护 playerId→nickname 映射，支持修改和回显
+5. WHEN Player 重连时，THE Game_Server SHALL 根据 playerId 自动恢复其昵称
+
+### 需求 28：邀请链接
+
+**用户故事：** 作为玩家，我希望能通过链接邀请朋友加入房间。
+
+#### 验收标准
+
+1. THE Client_UI SHALL 在房间内提供"邀请链接"复制按钮，生成 {origin}?room={roomId} 格式的 URL
+2. THE Client_UI SHALL 支持 Clipboard API 和 textarea fallback 两种复制方式，确保移动端兼容
+3. WHEN 玩家通过邀请链接打开页面时，THE Client_UI SHALL 自动读取 ?room= 参数并加入对应房间
+
+### 需求 29：中心方位块（Compass）
+
+**用户故事：** 作为玩家，我希望在牌桌中心看到方位指示和牌墙剩余数。
+
+#### 验收标准
+
+1. THE Client_UI SHALL 在牌桌正中央显示紫色四方块，四角显示東南西北（基于本地玩家视角）
+2. WHEN 某位 Player 的回合到来时，THE Client_UI SHALL 对该方位执行 opacity 闪烁动画
+3. THE Client_UI SHALL 在四方块圆心实时显示牌墙剩余数和当前局数
