@@ -20,7 +20,6 @@ export default function Home() {
     availableActions,
     gangOptions,
     remainingSeconds,
-    winResult,
     isDraw,
     diceResult,
     scoreLog,

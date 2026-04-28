@@ -20,28 +20,9 @@ export interface ClientGameState {
     handCount: number;
   }>;
   lastDiscard: GameState['lastDiscard'];
-  lastDrawnTileId: number | null;  // ID of the most recently drawn tile
+  lastDrawnTileId: number | null;
   isPaused: boolean;
-  autoPlayPlayerIds: string[]; // players currently in auto-pilot mode
-}
-
-/** 玩家信息 */
-export interface PlayerInfo {
-  id: string;
-  seat: number;
-}
-
-/** 等待操作选项 */
-export interface AwaitingOptions {
-  canPeng: boolean;
-  canGang: boolean;
-  canHu: boolean;
-}
-
-/** 游戏结果 */
-export interface GameResult {
-  winnerId: string;
-  scoreChanges: Array<{ playerId: string; delta: number }>;
+  autoPlayPlayerIds: string[];
 }
 
 /** 客户端 → 服务端事件 */
@@ -71,14 +52,14 @@ export interface RoomSyncData {
 
 /** 掷骰子结果 */
 export interface DiceResultData {
-  rolls: number[];       // 4 个玩家的点数
-  dealerIndex: number;   // 庄家索引
+  rolls: number[];
+  dealerIndex: number;
 }
 
 /** 服务端 → 客户端事件 */
 export interface ServerEvents {
   'room:created': (roomId: string) => void;
-  'room:joined': (playerInfo: PlayerInfo) => void;
+  'room:joined': (data: { id: string; seat: number }) => void;
   'room:player-ready': (playerId: string) => void;
   'room:player-unready': (playerId: string) => void;
   'room:sync': (data: RoomSyncData) => void;
@@ -86,13 +67,8 @@ export interface ServerEvents {
   'game:dice-result': (data: DiceResultData) => void;
   'game:started': (initialState: ClientGameState) => void;
   'game:state-update': (state: ClientGameState) => void;
-  'game:your-turn': (validActions: string[]) => void;
-  'game:awaiting': (options: AwaitingOptions) => void;
-  'game:win': (result: GameResult) => void;
-  'game:draw': () => void;
   'game:paused': (disconnectedPlayer: string) => void;
   'game:resumed': () => void;
   'room:vote-dissolve-request': (initiator: string) => void;
   'room:dissolved': (scoreHistory?: Array<{ round: number; result: string; scores: Array<{ seat: string; delta: number }> }>) => void;
-  'timer:tick': (seconds: number) => void;
 }

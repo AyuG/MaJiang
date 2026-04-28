@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
-import type { ClientEvents, ClientGameState, ServerEvents, GameResult } from '@/types';
+import type { ClientEvents, ClientGameState, ServerEvents } from '@/types';
 import { canWin } from '@/engine/win-checker';
 
 const TURN_SECONDS = 30;
@@ -32,7 +32,6 @@ export interface GameStateHook {
   availableActions: string[];
   gangOptions: GangInfo[];
   remainingSeconds: number;
-  winResult: GameResult | null;
   isDraw: boolean;
   diceResult: DiceInfo | null;
   scoreLog: ScoreLogEntry[];
@@ -42,7 +41,6 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
   const [gameState, setGameState] = useState<ClientGameState | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
-  const [winResult, setWinResult] = useState<GameResult | null>(null);
   const [isDraw, setIsDraw] = useState(false);
   const [diceResult, setDiceResult] = useState<DiceInfo | null>(null);
   const [scoreLog, setScoreLog] = useState<ScoreLogEntry[]>([]);
@@ -69,7 +67,6 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
     const onStarted = (state: ClientGameState) => {
       setGameState(state);
       setRoomId(state.roomId);
-      setWinResult(null);
       setIsDraw(false);
       setDiceResult(null);
       // Snapshot scores for delta calculation
@@ -136,14 +133,6 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
       setGameState((prev) => prev ? { ...prev, isPaused: false } : prev);
     };
 
-    const onWin = (result: GameResult) => {
-      setWinResult(result);
-    };
-
-    const onDraw = () => {
-      setIsDraw(true);
-    };
-
     const onDiceResult = (data: { rolls: number[]; dealerIndex: number }) => {
       setDiceResult(data);
     };
@@ -151,7 +140,6 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
     const onDissolved = (scoreHistory?: any[]) => {
       setGameState(null);
       setRoomId(null);
-      setWinResult(null);
       setIsDraw(false);
       setDiceResult(null);
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -169,8 +157,6 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
     socket.on('game:state-update', onStateUpdate);
     socket.on('game:paused', onPaused);
     socket.on('game:resumed', onResumed);
-    socket.on('game:win', onWin);
-    socket.on('game:draw', onDraw);
     socket.on('game:dice-result' as any, onDiceResult);
     socket.on('room:dissolved', onDissolved);
     socket.on('connect', onReconnect);
@@ -180,8 +166,6 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
       socket.off('game:state-update', onStateUpdate);
       socket.off('game:paused', onPaused);
       socket.off('game:resumed', onResumed);
-      socket.off('game:win', onWin);
-      socket.off('game:draw', onDraw);
       socket.off('game:dice-result' as any, onDiceResult);
       socket.off('room:dissolved', onDissolved);
       socket.off('connect', onReconnect);
@@ -284,5 +268,5 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.phase, gameState?.currentPlayerIndex, gameState?.turnCount]);
 
-  return { gameState, roomId, availableActions, gangOptions, remainingSeconds: showTimer ? remainingSeconds : 0, winResult, isDraw, diceResult, scoreLog };
+  return { gameState, roomId, availableActions, gangOptions, remainingSeconds: showTimer ? remainingSeconds : 0, isDraw, diceResult, scoreLog };
 }

@@ -22,9 +22,6 @@ export type {
 
 export type {
   ClientGameState,
-  PlayerInfo,
-  AwaitingOptions,
-  GameResult,
   DiceResultData,
   ClientEvents,
   ServerEvents,

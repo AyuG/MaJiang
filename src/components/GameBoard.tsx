@@ -123,7 +123,6 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
               seatOrder={[selfI, rightI, topI, leftI]}
               currentSeatIndex={cur}
               wallCount={gameState.wallCount}
-              roundNumber={gameState.roundNumber ?? 1}
             />
 
             <div className="G-c-right-rv">
