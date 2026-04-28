@@ -20,7 +20,7 @@ interface Props {
 
 export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDissolve, children }: Props) {
   const myIdx = gameState.players.findIndex((p) => p.id === myPlayerId);
-  const [selfI, rightI, topI, leftI] = [0,1,2,3].map((o) => (myIdx + o) % 4);
+  const [selfI, rightI, topI, leftI] = [0, 1, 2, 3].map((o) => (myIdx + o) % 4);
   const cur = gameState.currentPlayerIndex;
   const auto = gameState.autoPlayPlayerIds || [];
   const lastDrawn = gameState.lastDrawnTileId ?? undefined;
@@ -34,37 +34,34 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
     else { audioService.play('select'); setSel(id); }
   };
 
-  const ic = (i: number) => {
+  const icons = (i: number) => {
     const p = gameState.players[i];
-    const a: string[] = [];
-    if (!p.isConnected) a.push('🔴');
-    if (auto.includes(p.id)) a.push('🤖');
-    if (i === cur) a.push('🕒');
-    if (i === gameState.dealerIndex) a.push('庄');
-    return a.join('');
+    const ic: string[] = [];
+    if (!p.isConnected) ic.push('🔴');
+    if (auto.includes(p.id)) ic.push('🤖');
+    if (i === cur) ic.push('🕒');
+    if (i === gameState.dealerIndex) ic.push('庄');
+    return ic.join('');
   };
 
-  const PCard = ({ i, v }: { i: number; v?: boolean }) => {
+  /** Player info label */
+  const PLabel = ({ i }: { i: number }) => {
     const p = gameState.players[i];
     return (
-      <div className={`pc${i === cur ? ' pc-act' : ''}${v ? ' pc-v' : ''}`}>
-        <span className="pc-s">{SEATS[i]}</span>
-        <span className="pc-sc">{p.score}</span>
-        <span className="pc-n">{p.handCount}张</span>
-        <span className="pc-i">{ic(i)}</span>
+      <div className={`plbl${i === cur ? ' plbl-act' : ''}`}>
+        <span className="plbl-seat">{SEATS[i]}</span>
+        <span className="plbl-score">{p.score}分</span>
+        <span className="plbl-cnt">{p.handCount}张</span>
+        <span className="plbl-ic">{icons(i)}</span>
       </div>
     );
   };
 
-  const Melds = ({ i }: { i: number }) => (
-    <MeldDisplay melds={gameState.players[i].melds} ownerSeatIndex={i} allPlayerIds={allIds} />
-  );
-
-  const River = ({ i, cls }: { i: number; cls: string }) => {
+  /** River (discard pool) */
+  const River = ({ i }: { i: number }) => {
     const tiles = gameState.players[i].discardPool;
-    if (!tiles.length) return <div className={`rv ${cls}`} />;
     return (
-      <div className={`rv ${cls}`}>
+      <div className="river">
         {tiles.map((t, ti) => (
           <Tile key={t.id} tile={t} size="sm"
             isLastDrawn={ti === tiles.length - 1 && gameState.lastDiscard?.playerIndex === i} />
@@ -73,83 +70,85 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
     );
   };
 
-  const self = gameState.players[selfI];
   const sorted = [...gameState.myHand].sort((a, b) => {
     const o: Record<string, number> = { wan: 0, tiao: 1, tong: 2, feng: 3, zi: 4 };
     return (o[a.suit] ?? 9) - (o[b.suit] ?? 9) || a.value - b.value;
   });
 
   return (
-    <div className="T">
-      <header className="T-hd">
-        {roomId && <span className="hd-r">{roomId}</span>}
-        <span className={selfI === cur ? 'hd-my' : ''}>▶{cur === myIdx ? '你' : SEATS[cur]}</span>
-        <button className="hd-b" onClick={onVoteDissolve}>解散</button>
+    <div className="G">
+      {/* ── Header ── */}
+      <header className="G-hd">
+        <span className="hd-room">房间号：{roomId || '----'}</span>
+        <span>第{gameState.roundNumber ?? 1}局</span>
+        <span className={selfI === cur ? 'hd-my' : ''}>
+          ▶ {cur === myIdx ? '你' : SEATS[cur]}出牌
+        </span>
+        <button className="hd-btn" onClick={onVoteDissolve}>解散</button>
       </header>
 
-      <div className="T-felt">
-        {/* Top: card on edge, then meld+river toward center (left-to-right start) */}
-        <div className="f-top-edge"><PCard i={topI} /></div>
-        <div className="f-top-rv">
-          <div className="meld-river-row">
-            <Melds i={topI} />
-            <River i={topI} cls="rv-h" />
-          </div>
+      {/* ── Table ── */}
+      <div className="G-table">
+        {/* Top opponent: label + hand(hidden) */}
+        <div className="G-top">
+          <PLabel i={topI} />
         </div>
 
-        {/* Middle row */}
-        <div className="f-mid">
-          {/* Left: card on edge, meld+river toward center (top-to-bottom start) */}
-          <div className="f-left-edge"><PCard i={leftI} v /></div>
-          <div className="f-left-rv">
-            <div className="meld-river-col">
-              <Melds i={leftI} />
-              <River i={leftI} cls="rv-v" />
-            </div>
+        {/* Left opponent */}
+        <div className="G-left">
+          <PLabel i={leftI} />
+        </div>
+
+        {/* Right opponent */}
+        <div className="G-right">
+          <PLabel i={rightI} />
+        </div>
+
+        {/* Center area: melds → rivers → compass */}
+        <div className="G-center">
+          {/* Top meld + river */}
+          <div className="G-c-top">
+            <div className="meld-zone"><MeldDisplay melds={gameState.players[topI].melds} ownerSeatIndex={topI} allPlayerIds={allIds} /></div>
+            <River i={topI} />
           </div>
 
-          <div className="f-ctr">
+          {/* Middle: left-river | compass | right-river */}
+          <div className="G-c-mid">
+            <div className="G-c-left-rv">
+              <div className="meld-zone"><MeldDisplay melds={gameState.players[leftI].melds} ownerSeatIndex={leftI} allPlayerIds={allIds} /></div>
+              <River i={leftI} />
+            </div>
+
             <Compass
               seatOrder={[selfI, rightI, topI, leftI]}
               currentSeatIndex={cur}
               wallCount={gameState.wallCount}
               roundNumber={gameState.roundNumber ?? 1}
             />
-          </div>
 
-          {/* Right: mirror of left — river+meld from center outward (top-to-bottom start) */}
-          <div className="f-right-rv">
-            <div className="meld-river-col meld-river-col-r">
-              <Melds i={rightI} />
-              <River i={rightI} cls="rv-v" />
+            <div className="G-c-right-rv">
+              <River i={rightI} />
+              <div className="meld-zone"><MeldDisplay melds={gameState.players[rightI].melds} ownerSeatIndex={rightI} allPlayerIds={allIds} /></div>
             </div>
           </div>
-          <div className="f-right-edge"><PCard i={rightI} v /></div>
-        </div>
 
-        {/* Bottom: self meld+river toward center (left-to-right start) */}
-        <div className="f-bot-rv">
-          <div className="meld-river-row">
-            <Melds i={selfI} />
-            <River i={selfI} cls="rv-h" />
+          {/* Bottom meld + river */}
+          <div className="G-c-bot">
+            <div className="meld-zone"><MeldDisplay melds={gameState.players[selfI].melds} ownerSeatIndex={selfI} allPlayerIds={allIds} /></div>
+            <River i={selfI} />
           </div>
         </div>
-      </div>
 
-      {/* Bottom bar */}
-      <div className="T-bot">
-        {children}
-        <div className="b-info">
-          <span className="pc-s">{SEATS[selfI]}{selfI === gameState.dealerIndex ? '庄' : ''}</span>
-          <span className="pc-sc">分:{self.score}</span>
-          {auto.includes(self.id) && <span>🤖</span>}
-        </div>
-        <div className="b-hand">
-          {sorted.map((t) => (
-            <Tile key={t.id} tile={t} size="lg"
-              isSelected={t.id === sel} isLastDrawn={t.id === lastDrawn}
-              onClick={() => tap(t.id)} />
-          ))}
+        {/* Bottom: self hand */}
+        <div className="G-bot">
+          {children}
+          <div className="G-hand">
+            {sorted.map((t) => (
+              <Tile key={t.id} tile={t} size="lg"
+                isSelected={t.id === sel} isLastDrawn={t.id === lastDrawn}
+                onClick={() => tap(t.id)} />
+            ))}
+          </div>
         </div>
       </div>
     </div>

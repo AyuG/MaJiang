@@ -37,11 +37,15 @@ function getPlayerIdentity(): { playerId: string; nickname: string } {
 }
 
 let globalSocket: Socket<ServerEvents, ClientEvents> | null = null;
-let cachedIdentity: { playerId: string; nickname: string } = { playerId: '', nickname: '' };
+
+function getIdentity(): { playerId: string; nickname: string } {
+  if (typeof window === 'undefined') return { playerId: '', nickname: '' };
+  return getPlayerIdentity();
+}
 
 function getSocket(): Socket<ServerEvents, ClientEvents> {
   if (!globalSocket && typeof window !== 'undefined') {
-    cachedIdentity = getPlayerIdentity();
+    const identity = getIdentity();
     globalSocket = io(window.location.origin, {
       autoConnect: true,
       reconnection: true,
@@ -49,8 +53,8 @@ function getSocket(): Socket<ServerEvents, ClientEvents> {
       reconnectionDelay: 1000,
       transports: ['websocket', 'polling'],
       auth: {
-        playerId: cachedIdentity.playerId,
-        nickname: cachedIdentity.nickname,
+        playerId: identity.playerId,
+        nickname: identity.nickname,
       },
     });
   }
@@ -60,6 +64,7 @@ function getSocket(): Socket<ServerEvents, ClientEvents> {
 export function useSocket() {
   const [isConnected, setIsConnected] = useState(false);
   const [socket, setSocket] = useState<Socket<ServerEvents, ClientEvents> | null>(null);
+  const identity = typeof window !== 'undefined' ? getIdentity() : { playerId: '', nickname: '' };
 
   useEffect(() => {
     const s = getSocket();
@@ -81,7 +86,7 @@ export function useSocket() {
   return {
     socket,
     isConnected,
-    playerId: cachedIdentity.playerId,
-    nickname: cachedIdentity.nickname,
+    playerId: identity.playerId,
+    nickname: identity.nickname,
   };
 }
