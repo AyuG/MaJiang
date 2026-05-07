@@ -49,25 +49,6 @@ export function toClientState(state: GameState, playerId: string): ClientGameSta
   };
 }
 
-  /** Broadcast room sync to all sockets in a room */
-  function broadcastRoomSync(roomId: string) {
-    const room = roomManager.getRoom(roomId);
-    if (room) {
-      const syncData: RoomSyncData = {
-        roomId: room.roomId,
-        ownerId: room.ownerId,
-        players: room.players.map((p) => ({
-          id: p.id,
-          seat: p.seat,
-          isReady: p.isReady,
-          isConnected: p.isConnected,
-          nickname: nicknameMap.get(p.id),
-        })),
-      };
-      io.to(roomId).emit('room:sync', syncData);
-    }
-  }
-
 export function setupSocketHandlers(
   io: Server<ClientEvents, ServerEvents>,
   gameController: GameController,
