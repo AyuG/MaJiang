@@ -32,7 +32,6 @@ export interface GameStateHook {
   availableActions: string[];
   gangOptions: GangInfo[];
   remainingSeconds: number;
-  isDraw: boolean;
   diceResult: DiceInfo | null;
   scoreLog: ScoreLogEntry[];
 }
@@ -41,7 +40,6 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
   const [gameState, setGameState] = useState<ClientGameState | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
-  const [isDraw, setIsDraw] = useState(false);
   const [diceResult, setDiceResult] = useState<DiceInfo | null>(null);
   const [scoreLog, setScoreLog] = useState<ScoreLogEntry[]>([]);
   const prevScoresRef = useRef<Map<string, number>>(new Map());
@@ -67,7 +65,6 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
     const onStarted = (state: ClientGameState) => {
       setGameState(state);
       setRoomId(state.roomId);
-      setIsDraw(false);
       setDiceResult(null);
       // Snapshot scores for delta calculation
       const map = new Map<string, number>();
@@ -137,10 +134,9 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
       setDiceResult(data);
     };
 
-    const onDissolved = (scoreHistory?: any[]) => {
+    const onDissolved = (_scoreHistory?: unknown[]) => {
       setGameState(null);
       setRoomId(null);
-      setIsDraw(false);
       setDiceResult(null);
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       setRemainingSeconds(0);
@@ -268,5 +264,5 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.phase, gameState?.currentPlayerIndex, gameState?.turnCount]);
 
-  return { gameState, roomId, availableActions, gangOptions, remainingSeconds: showTimer ? remainingSeconds : 0, isDraw, diceResult, scoreLog };
+  return { gameState, roomId, availableActions, gangOptions, remainingSeconds: showTimer ? remainingSeconds : 0, diceResult, scoreLog };
 }

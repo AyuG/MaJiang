@@ -7,7 +7,7 @@ import { useGameState } from './useGameState';
 export function useMahjongSocket() {
   const { socket, isConnected, playerId, nickname: initialNickname } = useSocket();
   const [nickname, setNicknameState] = useState(initialNickname);
-  const { gameState, roomId, availableActions, gangOptions, remainingSeconds, isDraw, diceResult, scoreLog } =
+  const { gameState, roomId, availableActions, gangOptions, remainingSeconds, diceResult, scoreLog } =
     useGameState(socket, playerId);
 
   const changeNickname = useCallback((name: string) => {
@@ -108,7 +108,6 @@ export function useMahjongSocket() {
     availableActions,
     gangOptions,
     remainingSeconds,
-    isDraw,
     diceResult,
     scoreLog,
     createRoom,
