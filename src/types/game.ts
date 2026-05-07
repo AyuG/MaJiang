@@ -32,7 +32,7 @@ export interface PlayerState {
 export interface ActionLogEntry {
   timestamp: number;
   playerIndex: number;
-  action: 'draw' | 'discard' | 'peng' | 'ming_gang' | 'an_gang' | 'bu_gang' | 'hu' | 'pass';
+  action: 'deal' | 'draw' | 'discard' | 'peng' | 'ming_gang' | 'an_gang' | 'bu_gang' | 'hu' | 'pass';
   tileId?: number;
   detail?: string;
 }
