@@ -93,21 +93,21 @@ export default function Home() {
     };
 
     socket.on('room:created', onCreated);
-    socket.on('room:sync' as any, onSync);
-    socket.on('room:kicked' as any, onKicked);
+    socket.on('room:sync', onSync);
+    socket.on('room:kicked', onKicked);
     socket.on('room:dissolved', onDissolved);
     socket.on('room:vote-dissolve-request', onVoteRequest);
-    socket.on('room:error' as any, onRoomError);
-    socket.on('room:vote-dissolve-rejected' as any, onVoteRejected);
+    socket.on('room:error', onRoomError);
+    socket.on('room:vote-dissolve-rejected', onVoteRejected);
 
     return () => {
       socket.off('room:created', onCreated);
-      socket.off('room:sync' as any, onSync);
-      socket.off('room:kicked' as any, onKicked);
+      socket.off('room:sync', onSync);
+      socket.off('room:kicked', onKicked);
       socket.off('room:dissolved', onDissolved);
       socket.off('room:vote-dissolve-request', onVoteRequest);
-      socket.off('room:error' as any, onRoomError);
-      socket.off('room:vote-dissolve-rejected' as any, onVoteRejected);
+      socket.off('room:error', onRoomError);
+      socket.off('room:vote-dissolve-rejected', onVoteRejected);
     };
   }, [socket]);
 
@@ -131,6 +131,13 @@ export default function Home() {
     const winner = gameState.phase === 'WIN'
       ? players.reduce((best, p) => (p.score > best.score ? p : best), players[0])
       : null;
+    
+    // Get nickname from roomSync for display
+    const getPlayerDisplayName = (playerId: string) => {
+      if (playerId === myPlayerId) return '你';
+      const player = roomSync?.players.find(p => p.id === playerId);
+      return player?.nickname || playerId.slice(0, 8);
+    };
 
     return (
       <main>
@@ -139,12 +146,12 @@ export default function Home() {
             <>
               <h2>🎉 游戏结束</h2>
               {winner && <div style={{ fontSize: '1.2rem', color: '#ffd700', marginBottom: '0.5rem' }}>
-                胜者: {winner.id === myPlayerId ? '你' : winner.id.slice(0, 8)}
+                胜者: {getPlayerDisplayName(winner.id)}
               </div>}
               <div style={{ background: '#16213e', padding: '1rem', border: '1px solid #333', minWidth: '200px' }}>
                 {players.map((p) => (
                   <div key={p.id} style={{ padding: '0.25rem 0', color: p.score > 0 ? '#4caf50' : p.score < 0 ? '#ff6b6b' : '#e0e0e0' }}>
-                    {p.id === myPlayerId ? '你' : p.id.slice(0, 8)}: {p.score > 0 ? '+' : ''}{p.score}
+                    {getPlayerDisplayName(p.id)}: {p.score > 0 ? '+' : ''}{p.score}
                   </div>
                 ))}
               </div>
@@ -184,7 +191,7 @@ export default function Home() {
         {voteInitiator && voteInitiator !== myPlayerId && (
           <div className="vote-dialog">
             <div className="vote-content">
-              <p>玩家发起投票解散</p>
+              <p>{roomSync?.players.find(p => p.id === voteInitiator)?.nickname || voteInitiator.slice(0, 8)} 发起投票解散</p>
               <div className="vote-buttons">
                 <button className="lobby-btn" onClick={() => { socket?.emit('room:vote-dissolve-reply', true); setVoteInitiator(null); }}>同意</button>
                 <button className="lobby-btn" onClick={() => { socket?.emit('room:vote-dissolve-reply', false); setVoteInitiator(null); }}>拒绝</button>

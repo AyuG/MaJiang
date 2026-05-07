@@ -1,10 +1,11 @@
 import type { Server, Socket } from 'socket.io';
-import type { ClientEvents, ServerEvents, ClientGameState, RoomSyncData } from '@/types';
+import type { ClientEvents, ServerEvents, ClientGameState, RoomSyncData, SocketAuth } from '@/types';
 import type { GameState } from '@/types';
 import type { GameController } from '@/server/game-controller';
-import type { RoomManager, RoomState } from '@/server/room-manager';
+import type { RoomManager } from '@/server/room-manager';
 import { TurnTimer } from '@/server/turn-timer';
 import { canPeng as checkCanPeng, canMingGang as checkCanMingGang } from '@/engine/meld-actions';
+import { logger } from '@/server/logger';
 
 interface SocketMapping {
   roomId: string;
@@ -48,18 +49,24 @@ export function toClientState(state: GameState, playerId: string): ClientGameSta
   };
 }
 
-function toRoomSync(room: RoomState): RoomSyncData {
-  return {
-    roomId: room.roomId,
-    ownerId: room.ownerId,
-    players: room.players.map((p) => ({
-      id: p.id,
-      seat: p.seat,
-      isReady: p.isReady,
-      isConnected: p.isConnected,
-    })),
-  };
-}
+  /** Broadcast room sync to all sockets in a room */
+  function broadcastRoomSync(roomId: string) {
+    const room = roomManager.getRoom(roomId);
+    if (room) {
+      const syncData: RoomSyncData = {
+        roomId: room.roomId,
+        ownerId: room.ownerId,
+        players: room.players.map((p) => ({
+          id: p.id,
+          seat: p.seat,
+          isReady: p.isReady,
+          isConnected: p.isConnected,
+          nickname: nicknameMap.get(p.id),
+        })),
+      };
+      io.to(roomId).emit('room:sync', syncData);
+    }
+  }
 
 export function setupSocketHandlers(
   io: Server<ClientEvents, ServerEvents>,
@@ -74,15 +81,19 @@ export function setupSocketHandlers(
     try {
       const state = await gameController.handleTimeout(roomId, playerId, phase);
       await broadcastGameState(io, socketMap, roomId, state, turnTimer, handleRoundEnd, handleAutoPlay);
-    } catch { /* timeout handling failed */ }
+    } catch (err) {
+      logger.error('TurnTimer', 'Timeout handling failed', err);
+    }
   });
 
   /** Auto-play for disconnected/timeout players — called from broadcastGameState */
   async function handleAutoPlay(roomId: string, playerId: string, phase: GameState['phase']) {
     try {
-      const autoState = await gameController.handleTimeout(roomId, playerId, phase as any);
+      const autoState = await gameController.handleTimeout(roomId, playerId, phase);
       await broadcastGameState(io, socketMap, roomId, autoState, turnTimer, handleRoundEnd, handleAutoPlay);
-    } catch { /* ignore */ }
+    } catch (err) {
+      logger.error('handleAutoPlay', 'Auto-play failed', err);
+    }
   }
 
   /** Helper: dissolve room and emit score history */
@@ -90,7 +101,7 @@ export function setupSocketHandlers(
     turnTimer.clear(roomId);
     roundCounters.delete(roomId);
 
-    let scoreHistory: any[] = [];
+    let scoreHistory: unknown[] = [];
     try {
       const log = await gameController['redisStore'].getScoreLog(roomId);
       const SEATS = ['东', '南', '西', '北'];
@@ -99,9 +110,12 @@ export function setupSocketHandlers(
         result: entry.result,
         scores: entry.scores.map((s, i) => ({ seat: SEATS[i] ?? '?', delta: s.delta })),
       }));
-    } catch { /* ignore */ }
+    } catch (err) {
+      logger.warn('dissolveWithScores', 'Failed to fetch score log', err);
+    }
 
-    io.to(roomId).emit('room:dissolved', scoreHistory.length > 0 ? scoreHistory : undefined);
+    const history = scoreHistory.length > 0 ? scoreHistory as Array<{ round: number; result: string; scores: Array<{ seat: string; delta: number }> }> : undefined;
+    io.to(roomId).emit('room:dissolved', history);
     for (const [sid, m] of socketMap.entries()) {
       if (m.roomId === roomId) {
         const s = io.sockets.sockets.get(sid);
@@ -141,8 +155,8 @@ export function setupSocketHandlers(
           // Disconnected players → dissolve back to lobby
           await dissolveWithScores(roomId);
         }
-      } catch {
-        // Failed to start new round — dissolve
+      } catch (err) {
+        logger.error('handleRoundEnd', 'Failed to start new round', err);
         io.to(roomId).emit('room:dissolved');
       }
     }, 5000);
@@ -152,7 +166,18 @@ export function setupSocketHandlers(
   function broadcastRoomSync(roomId: string) {
     const room = roomManager.getRoom(roomId);
     if (room) {
-      io.to(roomId).emit('room:sync', toRoomSync(room));
+      const syncData: RoomSyncData = {
+        roomId: room.roomId,
+        ownerId: room.ownerId,
+        players: room.players.map((p) => ({
+          id: p.id,
+          seat: p.seat,
+          isReady: p.isReady,
+          isConnected: p.isConnected,
+          nickname: nicknameMap.get(p.id),
+        })),
+      };
+      io.to(roomId).emit('room:sync', syncData);
     }
   }
 
@@ -177,11 +202,12 @@ export function setupSocketHandlers(
 
   io.on('connection', (socket: Socket<ClientEvents, ServerEvents>) => {
 
-    const persistentId = (socket.handshake.auth as any)?.playerId || socket.id;
-    const persistentNickname = (socket.handshake.auth as any)?.nickname || persistentId.slice(0, 8);
+    const auth = socket.handshake.auth as SocketAuth;
+    const persistentId = auth?.playerId || socket.id;
+    const persistentNickname = auth?.nickname || persistentId.slice(0, 8);
 
-    // Store/restore nickname
-    if (!nicknameMap.has(persistentId)) {
+    // Always update nickname from client (supports nickname change on reconnect)
+    if (persistentNickname) {
       nicknameMap.set(persistentId, persistentNickname);
     }
 
@@ -193,7 +219,7 @@ export function setupSocketHandlers(
     }
 
     // ── Nickname change ──
-    socket.on('room:change-nickname' as any, (name: string) => {
+    socket.on('room:change-nickname', (name: string) => {
       if (typeof name === 'string' && /^[a-zA-Z0-9\u4e00-\u9fa5]{1,8}$/.test(name)) {
         nicknameMap.set(persistentId, name);
         // Broadcast updated sync if in a room
@@ -227,7 +253,7 @@ export function setupSocketHandlers(
       const room = roomManager.getRoom(roomId);
 
       if (!room) {
-        socket.emit('room:error' as any, '房间不存在');
+        socket.emit('room:error', '房间不存在');
         return;
       }
 
@@ -253,14 +279,16 @@ export function setupSocketHandlers(
             await gameController['redisStore'].saveGameState(roomId, patchedState);
             socket.emit('game:started', toClientState(patchedState, playerId));
             await broadcastGameState(io, socketMap, roomId, patchedState, turnTimer, handleRoundEnd, handleAutoPlay);
-          } catch { /* ignore */ }
+          } catch (err) {
+            logger.error('room:join', 'Reconnect failed', err);
+          }
           return;
         }
 
         // Second: check for any disconnected seat to substitute into
         const disconnectedPlayer = room.players.find((p) => !p.isConnected);
         if (!disconnectedPlayer) {
-          socket.emit('room:error' as any, '房间已满，游戏进行中');
+          socket.emit('room:error', '房间已满，游戏进行中');
           return;
         }
 
@@ -289,7 +317,9 @@ export function setupSocketHandlers(
           socket.emit('game:started', toClientState(patchedState, playerId));
           // Broadcast updated state to all
           await broadcastGameState(io, socketMap, roomId, patchedState, turnTimer, handleRoundEnd, handleAutoPlay);
-        } catch { /* ignore */ }
+        } catch (err) {
+          logger.error('room:join', 'Substitute reconnect failed', err);
+        }
         return;
       }
 
@@ -314,8 +344,9 @@ export function setupSocketHandlers(
         socket.join(roomId);
         io.to(roomId).emit('room:joined', { id: playerId, seat: room.players.length - 1 });
         broadcastRoomSync(roomId);
-      } catch (err: any) {
-        socket.emit('room:error' as any, err?.message ?? '加入房间失败');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : '加入房间失败';
+        socket.emit('room:error', message);
       }
     });
 
@@ -328,8 +359,8 @@ export function setupSocketHandlers(
         roomManager.setReady(roomId, playerId);
         io.to(roomId).emit('room:player-ready', playerId);
         broadcastRoomSync(roomId);
-      } catch {
-        // ignore
+      } catch (err) {
+        logger.warn('room:ready', 'Failed to set ready', err);
       }
     });
 
@@ -342,8 +373,8 @@ export function setupSocketHandlers(
         roomManager.setUnready(roomId, playerId);
         io.to(roomId).emit('room:player-unready', playerId);
         broadcastRoomSync(roomId);
-      } catch {
-        // ignore
+      } catch (err) {
+        logger.warn('room:unready', 'Failed to set unready', err);
       }
     });
 
@@ -361,7 +392,7 @@ export function setupSocketHandlers(
 
         // Roll dice to determine dealer
         const diceResult = roomManager.rollDice(roomId);
-        io.to(roomId).emit('game:dice-result' as any, {
+        io.to(roomId).emit('game:dice-result', {
           rolls: diceResult.rolls,
           dealerIndex: diceResult.dealerIndex,
         });
@@ -384,10 +415,12 @@ export function setupSocketHandlers(
                 turnTimer.startTurnTimer(roomId, currentPlayer.id);
               }
             }
-          } catch { /* ignore */ }
+          } catch (err) {
+            logger.error('room:start', 'Failed to start game after dice', err);
+          }
         }, 3000);
-      } catch {
-        // ignore
+      } catch (err) {
+        logger.warn('room:start', 'Failed to start game', err);
       }
     });
 
@@ -411,8 +444,8 @@ export function setupSocketHandlers(
           }
         }
         broadcastRoomSync(roomId);
-      } catch {
-        // not owner or target not found
+      } catch (err) {
+        logger.warn('room:kick', 'Kick failed (not owner or target not found)', err);
       }
     });
 
@@ -432,8 +465,8 @@ export function setupSocketHandlers(
             socketMap.delete(sid);
           }
         }
-      } catch {
-        // not owner
+      } catch (err) {
+        logger.warn('room:dissolve', 'Dissolve failed (not owner)', err);
       }
     });
 
@@ -444,7 +477,9 @@ export function setupSocketHandlers(
       try {
         const state = await gameController.handlePlayerAction(mapping.roomId, mapping.playerId, { type: 'discard', tileId });
         await broadcastGameState(io, socketMap, mapping.roomId, state, turnTimer, handleRoundEnd, handleAutoPlay);
-      } catch { /* invalid */ }
+      } catch (err) {
+        logger.warn('game:discard', 'Invalid discard action', err);
+      }
     });
 
     socket.on('game:peng', async () => {
@@ -453,7 +488,9 @@ export function setupSocketHandlers(
       try {
         const state = await gameController.handlePlayerAction(mapping.roomId, mapping.playerId, { type: 'peng' });
         await broadcastGameState(io, socketMap, mapping.roomId, state, turnTimer, handleRoundEnd, handleAutoPlay);
-      } catch { /* invalid */ }
+      } catch (err) {
+        logger.warn('game:peng', 'Invalid peng action', err);
+      }
     });
 
     socket.on('game:gang', async (type: 'ming' | 'an' | 'bu', tileId?: number) => {
@@ -467,7 +504,9 @@ export function setupSocketHandlers(
             : { type: 'bu_gang' as const, tileId: tileId! };
         const state = await gameController.handlePlayerAction(mapping.roomId, mapping.playerId, action);
         await broadcastGameState(io, socketMap, mapping.roomId, state, turnTimer, handleRoundEnd, handleAutoPlay);
-      } catch { /* invalid */ }
+      } catch (err) {
+        logger.warn('game:gang', 'Invalid gang action', err);
+      }
     });
 
     socket.on('game:hu', async () => {
@@ -476,7 +515,9 @@ export function setupSocketHandlers(
       try {
         const state = await gameController.handlePlayerAction(mapping.roomId, mapping.playerId, { type: 'hu' });
         await broadcastGameState(io, socketMap, mapping.roomId, state, turnTimer, handleRoundEnd, handleAutoPlay);
-      } catch { /* invalid */ }
+      } catch (err) {
+        logger.warn('game:hu', 'Invalid hu action', err);
+      }
     });
 
     socket.on('game:pass', async () => {
@@ -485,7 +526,9 @@ export function setupSocketHandlers(
       try {
         const state = await gameController.handlePlayerAction(mapping.roomId, mapping.playerId, { type: 'pass' });
         await broadcastGameState(io, socketMap, mapping.roomId, state, turnTimer, handleRoundEnd, handleAutoPlay);
-      } catch { /* invalid */ }
+      } catch (err) {
+        logger.warn('game:pass', 'Invalid pass action', err);
+      }
     });
 
     // ── Vote dissolve ────────────────────────────────
@@ -506,7 +549,9 @@ export function setupSocketHandlers(
         }
 
         io.to(mapping.roomId).emit('room:vote-dissolve-request', mapping.playerId);
-      } catch { /* ignore */ }
+      } catch (err) {
+        logger.warn('room:vote-dissolve', 'Vote dissolve failed', err);
+      }
     });
 
     socket.on('room:vote-dissolve-reply', async (agree: boolean) => {
@@ -518,9 +563,11 @@ export function setupSocketHandlers(
           await dissolveWithScores(mapping.roomId);
         } else if (!agree) {
           // Someone rejected — notify all to close vote dialog
-          io.to(mapping.roomId).emit('room:vote-dissolve-rejected' as any);
+          io.to(mapping.roomId).emit('room:vote-dissolve-rejected');
         }
-      } catch { /* ignore */ }
+      } catch (err) {
+        logger.warn('room:vote-dissolve-reply', 'Vote reply failed', err);
+      }
     });
 
     // ── Disconnect ───────────────────────────────────
@@ -563,7 +610,9 @@ export function setupSocketHandlers(
             // Not their turn — just broadcast the disconnect status
             await broadcastGameState(io, socketMap, roomId, state, turnTimer, handleRoundEnd, handleAutoPlay);
           }
-        } catch { /* ignore */ }
+        } catch (err) {
+          logger.error('disconnect', 'Failed to handle disconnect during game', err);
+        }
       }
     });
   });

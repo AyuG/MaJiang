@@ -26,4 +26,5 @@ export type {
   ClientEvents,
   ServerEvents,
   RoomSyncData,
+  SocketAuth,
 } from './events';

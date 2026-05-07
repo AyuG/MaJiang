@@ -1,5 +1,11 @@
 import type { GameState, PlayerState } from './game';
 
+/** Socket handshake auth data */
+export interface SocketAuth {
+  playerId?: string;
+  nickname?: string;
+}
+
 /** 客户端可见的游戏状态（隐藏其他玩家手牌） */
 export interface ClientGameState {
   phase: GameState['phase'];
@@ -34,6 +40,7 @@ export interface ClientEvents {
   'room:kick': (targetId: string) => void;
   'room:dissolve': () => void;
   'room:start': () => void;
+  'room:change-nickname': (name: string) => void;
   'game:discard': (tileId: number) => void;
   'game:peng': () => void;
   'game:gang': (type: 'ming' | 'an' | 'bu', tileId?: number) => void;
@@ -47,7 +54,7 @@ export interface ClientEvents {
 export interface RoomSyncData {
   roomId: string;
   ownerId: string;
-  players: Array<{ id: string; seat: string; isReady: boolean; isConnected: boolean }>;
+  players: Array<{ id: string; seat: string; isReady: boolean; isConnected: boolean; nickname?: string }>;
 }
 
 /** 掷骰子结果 */
@@ -64,11 +71,13 @@ export interface ServerEvents {
   'room:player-unready': (playerId: string) => void;
   'room:sync': (data: RoomSyncData) => void;
   'room:kicked': (targetId: string) => void;
+  'room:error': (message: string) => void;
   'game:dice-result': (data: DiceResultData) => void;
   'game:started': (initialState: ClientGameState) => void;
   'game:state-update': (state: ClientGameState) => void;
   'game:paused': (disconnectedPlayer: string) => void;
   'game:resumed': () => void;
   'room:vote-dissolve-request': (initiator: string) => void;
+  'room:vote-dissolve-rejected': () => void;
   'room:dissolved': (scoreHistory?: Array<{ round: number; result: string; scores: Array<{ seat: string; delta: number }> }>) => void;
 }

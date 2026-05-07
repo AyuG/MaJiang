@@ -124,12 +124,13 @@ export function Lobby({
               const isMe = p?.id === myId;
               const isPlayerOwner = p?.id === roomSync?.ownerId;
               const seatKey = p?.seat ?? ['east','south','west','north'][i];
+              const displayName = isMe ? '你' : (p?.nickname || p?.id?.slice(0, 8) || '未知');
               return (
                 <div key={i} className={`player-slot${isMe ? ' player-slot-self' : ''}`}>
                   {SEAT_LABELS[seatKey]}:{' '}
                   {p ? (
                     <>
-                      {isMe ? '你' : p.id.slice(0, 8)}
+                      {displayName}
                       {isPlayerOwner && ' 👑'}
                       {!p.isConnected && ' 🔴断线'}
                       {p.isConnected && p.isReady && ' ✅已准备'}

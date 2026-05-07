@@ -14,6 +14,8 @@ import type { MockWallConfig } from '@/engine/mock-wall';
 
 function waitForEvent<T>(socket: ClientSocket<ServerEvents, ClientEvents>, event: string): Promise<T> {
   return new Promise((resolve) => {
+    // Using internal once method for test utility
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (socket as any).once(event, (data: T) => resolve(data));
   });
 }
@@ -34,6 +36,8 @@ describe('Socket.io integration', () => {
   beforeAll(async () => {
     // Set up Redis mock
     const redisMock = new RedisMock();
+    // ioredis-mock has compatible runtime API but different type signature
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     redisStore = new RedisStore(redisMock as any);
 
     // Set up room manager

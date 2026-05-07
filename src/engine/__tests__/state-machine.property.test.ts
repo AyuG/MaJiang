@@ -366,7 +366,7 @@ describe('Property 19: 操作日志完整性', () => {
 
         // deal action log
         const dealLog = turnState.actionLog[turnState.actionLog.length - 1];
-        expect(dealLog.action).toBe('deal' as any);
+        expect(dealLog.action).toBe('deal');
         expect(dealLog.playerIndex).toBe(dealing.dealerIndex);
 
         // discard action log

@@ -15,7 +15,7 @@ export function useMahjongSocket() {
       localStorage.setItem('mj_nickname', name);
     }
     setNicknameState(name);
-    socket?.emit('room:change-nickname' as any, name);
+    socket?.emit('room:change-nickname', name);
   }, [socket]);
 
   const createRoom = useCallback(() => {

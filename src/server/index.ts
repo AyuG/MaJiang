@@ -8,6 +8,7 @@ import { RoomManager } from '@/server/room-manager';
 import { GameController } from '@/server/game-controller';
 import { setupSocketHandlers } from '@/server/socket-handler';
 import { recoverActiveGames } from '@/server/recovery';
+import { logger } from '@/server/logger';
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
@@ -23,7 +24,43 @@ app.prepare().then(async () => {
   const io = new Server(httpServer, { cors: { origin: '*' } });
 
   const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-  const redis = new Redis(redisUrl);
+  
+  // Create Redis client with retry strategy
+  const redis = new Redis(redisUrl, {
+    retryStrategy: (times: number) => {
+      if (times > 10) {
+        logger.error('Redis', 'Redis connection failed after 10 retries', new Error('Max retries exceeded'));
+        return null; // Stop retrying
+      }
+      const delay = Math.min(times * 100, 3000);
+      logger.warn('Redis', `Redis reconnecting in ${delay}ms (attempt ${times})`);
+      return delay;
+    },
+    maxRetriesPerRequest: 3,
+    enableReadyCheck: true,
+    connectTimeout: 10000,
+  });
+
+  redis.on('connect', () => {
+    logger.info('Redis', 'Redis connecting...');
+  });
+
+  redis.on('ready', () => {
+    logger.info('Redis', 'Redis ready');
+  });
+
+  redis.on('error', (err) => {
+    logger.error('Redis', 'Redis error', err);
+  });
+
+  redis.on('close', () => {
+    logger.warn('Redis', 'Redis connection closed');
+  });
+
+  redis.on('reconnecting', () => {
+    logger.info('Redis', 'Redis reconnecting...');
+  });
+
   const redisStore = new RedisStore(redis);
   const roomManager = new RoomManager();
   const gameController = new GameController(roomManager, redisStore);

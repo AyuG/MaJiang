@@ -33,6 +33,8 @@ describe('RedisStore', () => {
   beforeEach(async () => {
     const client = new RedisMock();
     await client.flushall();
+    // ioredis-mock has compatible runtime API but different type signature
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     store = new RedisStore(client as any);
   });
 

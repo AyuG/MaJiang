@@ -21,7 +21,7 @@ const defaultConfig: RuleConfig = createDefaultRuleProvider().config;
 function appendLog(
   actionLog: ActionLogEntry[],
   playerIndex: number,
-  action: string,
+  action: ActionLogEntry['action'],
   tileId?: number,
 ): ActionLogEntry[] {
   return [
@@ -29,7 +29,7 @@ function appendLog(
     {
       timestamp: Date.now(),
       playerIndex,
-      action: action as ActionLogEntry['action'],
+      action,
       tileId,
     },
   ];
@@ -95,7 +95,7 @@ function handleDeal(state: GameState): GameState {
     wall: result.wall,
     currentPlayerIndex: state.dealerIndex,
     turnCount: 1,
-    actionLog: appendLog(state.actionLog, state.dealerIndex, 'deal' as any),
+    actionLog: appendLog(state.actionLog, state.dealerIndex, 'deal'),
   };
 }
 
@@ -257,6 +257,7 @@ function handlePeng(state: GameState): GameState {
     currentPlayerIndex: pengPlayer,
     consecutiveGangCount: 0,
     lastDiscard: null,
+    lastDrawnTileId: null, // 碰牌后没有摸牌，不能胡
     actionLog: appendLog(state.actionLog, pengPlayer, 'peng', discarded.id),
   };
 }
@@ -403,14 +404,17 @@ function handleBuGang(state: GameState, tileId: number): GameState {
   players[pi].melds = melds;
 
   // Record gang score — bu_gang target is the original peng source
-  // For simplicity, use the previous player as target (same as ming_gang logic)
+  // fromPlayer is a player ID string; find the corresponding index
   const originalMeld = state.players[pi].melds[buGangInfo.meldIndex];
-  const targetPlayer = originalMeld.fromPlayer;
-  const gangRecord = recordGangScore(
-    'bu',
-    pi,
-    targetPlayer !== undefined ? state.players.findIndex((p) => p.id === targetPlayer) : undefined,
-  );
+  const targetPlayerId = originalMeld.fromPlayer;
+  let targetPlayerIndex: number | undefined;
+  if (targetPlayerId !== undefined) {
+    const foundIndex = state.players.findIndex((p) => p.id === targetPlayerId);
+    if (foundIndex >= 0 && foundIndex < 4) {
+      targetPlayerIndex = foundIndex;
+    }
+  }
+  const gangRecord = recordGangScore('bu', pi, targetPlayerIndex);
   const gangRecords = [...state.gangRecords, gangRecord];
 
   // Supplement draw: bu_gang takes 'last'
@@ -449,6 +453,10 @@ function handleHu(state: GameState): GameState {
   const pi = state.currentPlayerIndex;
   const player = state.players[pi];
 
+  // Must have drawn a tile (self-draw) to declare hu
+  // 碰牌后不能立即胡，必须等待自摸
+  if (state.lastDrawnTileId === null) return state;
+  
   if (!canWin(player.hand, player.melds)) return state;
 
   const players = clonePlayers(state);
@@ -535,8 +543,9 @@ export function getValidActions(state: GameState): GameAction[] {
       const hasDrawn = handSize === expectedHandForDiscard;
 
       if (hasDrawn) {
-        // Can hu?
-        if (canWin(player.hand, player.melds)) {
+        // Can hu? Only if player has actually drawn a tile (self-draw)
+        // 碰牌后 lastDrawnTileId 为 null，不能胡；摸牌后 lastDrawnTileId 不为 null，可以胡
+        if (state.lastDrawnTileId !== null && canWin(player.hand, player.melds)) {
           actions.push({ type: 'hu' });
         }
 

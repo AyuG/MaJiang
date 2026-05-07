@@ -57,7 +57,7 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
     );
   };
 
-  /** River (discard pool) */
+  /** River (discard pool) - innermost layer */
   const River = ({ i }: { i: number }) => {
     const tiles = gameState.players[i].discardPool;
     return (
@@ -69,6 +69,18 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
       </div>
     );
   };
+
+  /** Meld zone - middle layer */
+  const MeldZone = ({ i, position }: { i: number; position: 'self' | 'right' | 'top' | 'left' }) => (
+    <div className="meld-zone">
+      <MeldDisplay 
+        melds={gameState.players[i].melds} 
+        ownerSeatIndex={i} 
+        allPlayerIds={allIds}
+        position={position}
+      />
+    </div>
+  );
 
   const sorted = [...gameState.myHand].sort((a, b) => {
     const o: Record<string, number> = { wan: 0, tiao: 1, tong: 2, feng: 3, zi: 4 };
@@ -89,56 +101,40 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
 
       {/* ── Table ── */}
       <div className="G-table">
-        {/* Top opponent: label + hand(hidden) */}
-        <div className="G-top">
-          <PLabel i={topI} />
-        </div>
+        {/* ── Layer 1: Player labels (outermost edges) ── */}
+        <div className="G-top"><PLabel i={topI} /></div>
+        <div className="G-left"><PLabel i={leftI} /></div>
+        <div className="G-right"><PLabel i={rightI} /></div>
 
-        {/* Left opponent */}
-        <div className="G-left">
-          <PLabel i={leftI} />
-        </div>
-
-        {/* Right opponent */}
-        <div className="G-right">
-          <PLabel i={rightI} />
-        </div>
-
-        {/* Center area: melds → rivers → compass */}
+        {/* ── Center area with 3 concentric layers ── */}
         <div className="G-center">
-          {/* Top meld + river */}
-          <div className="G-c-top">
-            <div className="meld-zone"><MeldDisplay melds={gameState.players[topI].melds} ownerSeatIndex={topI} allPlayerIds={allIds} /></div>
-            <River i={topI} />
+          {/* ── Layer 2: Meld zone (middle layer) ── */}
+          <div className="G-meld-layer">
+            <div className="G-meld-top"><MeldZone i={topI} position="top" /></div>
+            <div className="G-meld-left"><MeldZone i={leftI} position="left" /></div>
+            <div className="G-meld-right"><MeldZone i={rightI} position="right" /></div>
+            <div className="G-meld-self"><MeldZone i={selfI} position="self" /></div>
           </div>
 
-          {/* Middle: left-river | compass | right-river */}
-          <div className="G-c-mid">
-            <div className="G-c-left-rv">
-              <div className="meld-zone"><MeldDisplay melds={gameState.players[leftI].melds} ownerSeatIndex={leftI} allPlayerIds={allIds} /></div>
-              <River i={leftI} />
-            </div>
+          {/* ── Layer 3: River zone (inner layer) ── */}
+          <div className="G-river-layer">
+            <div className="G-river-top"><River i={topI} /></div>
+            <div className="G-river-left"><River i={leftI} /></div>
+            <div className="G-river-right"><River i={rightI} /></div>
+            <div className="G-river-self"><River i={selfI} /></div>
+          </div>
 
+          {/* ── Compass (center) ── */}
+          <div className="G-compass">
             <Compass
               seatOrder={[selfI, rightI, topI, leftI]}
               currentSeatIndex={cur}
               wallCount={gameState.wallCount}
             />
-
-            <div className="G-c-right-rv">
-              <River i={rightI} />
-              <div className="meld-zone"><MeldDisplay melds={gameState.players[rightI].melds} ownerSeatIndex={rightI} allPlayerIds={allIds} /></div>
-            </div>
-          </div>
-
-          {/* Bottom meld + river */}
-          <div className="G-c-bot">
-            <div className="meld-zone"><MeldDisplay melds={gameState.players[selfI].melds} ownerSeatIndex={selfI} allPlayerIds={allIds} /></div>
-            <River i={selfI} />
           </div>
         </div>
 
-        {/* Bottom: self hand */}
+        {/* ── Layer 1: Self hand (outermost) ── */}
         <div className="G-bot">
           {children}
           <div className="G-hand">

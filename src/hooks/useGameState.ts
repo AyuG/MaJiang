@@ -134,7 +134,7 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
       setDiceResult(data);
     };
 
-    const onDissolved = (_scoreHistory?: unknown[]) => {
+    const onDissolved = (_scoreHistory?: Array<{ round: number; result: string; scores: Array<{ seat: string; delta: number }> }>) => {
       setGameState(null);
       setRoomId(null);
       setDiceResult(null);
@@ -153,7 +153,7 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
     socket.on('game:state-update', onStateUpdate);
     socket.on('game:paused', onPaused);
     socket.on('game:resumed', onResumed);
-    socket.on('game:dice-result' as any, onDiceResult);
+    socket.on('game:dice-result', onDiceResult);
     socket.on('room:dissolved', onDissolved);
     socket.on('connect', onReconnect);
 
@@ -162,7 +162,7 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
       socket.off('game:state-update', onStateUpdate);
       socket.off('game:paused', onPaused);
       socket.off('game:resumed', onResumed);
-      socket.off('game:dice-result' as any, onDiceResult);
+      socket.off('game:dice-result', onDiceResult);
       socket.off('room:dissolved', onDissolved);
       socket.off('connect', onReconnect);
       if (timerRef.current) clearInterval(timerRef.current);
@@ -192,7 +192,9 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
         availableActions.push('discard');
 
         // Check hu: client-side win check using the engine
-        if (canWin(myHand, myMelds)) {
+        // Only allow hu if player has actually drawn (self-draw), not after peng
+        // 碰牌后 lastDrawnTileId 为 null，不能胡
+        if (gameState.lastDrawnTileId !== null && canWin(myHand, myMelds)) {
           availableActions.push('hu');
         }
 
