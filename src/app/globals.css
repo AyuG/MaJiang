@@ -67,7 +67,7 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   overflow:hidden;
 }
 
-/* Layer 2: Meld zone — outer ring (away from center, near edges) */
+/* Layer 2: Meld zone — outer ring (pushed toward edges, away from center) */
 .G-meld-layer{
   position:absolute;
   inset:0;
@@ -81,12 +81,12 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   pointer-events:none;
 }
 .G-meld-layer > div{pointer-events:auto}
-.G-meld-top{grid-area:top;display:flex;justify-content:center;align-items:flex-end;align-self:start}
-.G-meld-left{grid-area:left;display:flex;justify-content:flex-end;align-items:center;justify-self:start}
-.G-meld-right{grid-area:right;display:flex;justify-content:flex-start;align-items:center;justify-self:end}
-.G-meld-self{grid-area:self;display:flex;justify-content:center;align-items:flex-start;align-self:end}
+.G-meld-top{grid-area:top;display:flex;justify-content:center;align-items:flex-end;padding-bottom:.75rem}
+.G-meld-left{grid-area:left;display:flex;justify-content:flex-end;align-items:center;padding-right:.5rem}
+.G-meld-right{grid-area:right;display:flex;justify-content:flex-start;align-items:center;padding-left:.5rem}
+.G-meld-self{grid-area:self;display:flex;justify-content:center;align-items:flex-start;padding-top:.75rem}
 
-/* Layer 3: River zone — inner ring (closer to center) */
+/* Layer 3: River zone — inner ring (centered in grid cells, no extreme push) */
 .G-river-layer{
   position:absolute;
   inset:0;
@@ -100,10 +100,10 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   pointer-events:none;
 }
 .G-river-layer > div{pointer-events:auto}
-.G-river-top{grid-area:top;display:flex;justify-content:center;align-items:center;align-self:end}
-.G-river-left{grid-area:left;display:flex;justify-content:center;align-items:center;justify-self:end}
-.G-river-right{grid-area:right;display:flex;justify-content:center;align-items:center;justify-self:start}
-.G-river-self{grid-area:self;display:flex;justify-content:center;align-items:center;align-self:start}
+.G-river-top{grid-area:top;display:flex;justify-content:center;align-items:center}
+.G-river-left{grid-area:left;display:flex;justify-content:center;align-items:center}
+.G-river-right{grid-area:right;display:flex;justify-content:center;align-items:center}
+.G-river-self{grid-area:self;display:flex;justify-content:center;align-items:center}
 
 /* Compass (center) */
 .G-compass{
@@ -139,9 +139,9 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
 /* River (horizontal: self + top use 6-per-row grid) */
 .river{display:grid;grid-template-columns:repeat(6,auto);gap:1px;justify-content:center}
 
-/* River (vertical: left/right players) — single column, tiles flow toward center */
-.G-river-left .river{grid-template-columns:auto;grid-template-rows:repeat(2,auto);justify-content:end}
-.G-river-right .river{grid-template-columns:auto;grid-template-rows:repeat(2,auto);justify-content:start}
+/* River (vertical: left/right players) — flex column, tiles stack with 1px gap like own discard */
+.G-river-left .river{display:flex;flex-direction:column;gap:1px;align-items:flex-end}
+.G-river-right .river{display:flex;flex-direction:column;gap:1px;align-items:flex-start}
 .G-river-left .river .tile{transform:rotate(90deg);overflow:visible}
 .G-river-right .river .tile{transform:rotate(-90deg);overflow:visible}
 
@@ -149,9 +149,9 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
 .meld-zone{display:flex;gap:2px;align-items:flex-end}
 .meld-row{display:flex;gap:4px;flex-wrap:wrap;align-items:flex-end}
 .meld-row-self{flex-direction:row}
-.meld-row-right{flex-direction:column;align-items:flex-end}
+.meld-row-right{flex-direction:row;align-items:flex-end}
 .meld-row-top{flex-direction:row}
-.meld-row-left{flex-direction:column;align-items:flex-start}
+.meld-row-left{flex-direction:row;align-items:flex-start}
 .meld-group{display:flex;gap:1px;align-items:flex-end;position:relative}
 .meld-group.meld-peng,.meld-group.meld-ming_gang{flex-direction:row}
 .meld-group.meld-an-gang{flex-direction:row}
