@@ -627,22 +627,33 @@
   - [x] 28.2 下家信息显示不全
     - G-bot 跨三列后右侧空间释放，下家标签不再被挤压
     - _需求: 20.2_
+  - [x] 28.3 手牌弹跳动画裁剪
+    - G-hand 添加 padding-top:10px + overflow-y:visible，为 bounce/selbounce 动画提供高度空间
+    - _需求: 22.3_
 
 - [x] 29. 积分面板拖动消失修复
   - [x] 29.1 Y 轴拖拽方向反转
     - 父容器使用 bottom 定位但原计算按 top 处理，造成向上拖拽时面板向下移出屏幕
     - offset.y = e.clientY + pos.y / pos.y = offset.y - e.clientY 修正
-  - [x] 29.2 点击按钮误触拖拽防护
-    - 添加 4px 拖拽阈值，纯点击不计为拖拽
+  - [x] 29.2 重写为 document 级 pointer 事件
+    - 移除 setPointerCapture（导致部分环境 click 失效）
+    - useEffect 中 document.addEventListener('pointermove'/'pointerup') 替代
+    - 按钮点击检测：closest('button') 跳过 drag
     - _需求: 18.6_
 
-- [x] 30. 牌桌同心圆布局修复
+- [x] 30. 牌桌同心圆布局 + 方位旋转
   - [x] 30.1 弃牌/碰杠区域层次纠正
-    - 弃牌区（river）为内层，使用 inset:clamp() 收缩至圆心附近
-    - 碰杠区（meld）为中间层，保持 inset:0 配合 clamp() padding 推至外缘
-    - 两层形成真正的同心圆结构，不重叠
+    - 使用 align-self/justify-self 实现同心圆：
+    - meld 层：align-self:start/end + justify-self:start/end → 推至外缘（远离圆心）
+    - river 层：align-self:end/start + justify-self:end/start → 拉向内圈（靠近圆心）
+    - 两层均为 inset:0 同一 grid，通过 grid 定位而非 padding/inset 实现层次区分，避免重叠
     - _需求: 22.1, 22.2_
-  - [x] 30.2 圆心圆形边框
+  - [x] 30.2 上/下家弃牌碰杠牌 90° 旋转
+    - 上家（G-river-left / G-meld-left）：tile transform:rotate(90deg) + overflow:visible
+    - 下家（G-river-right / G-meld-right）：tile transform:rotate(-90deg) + overflow:visible
+    - 上/下家 river 改为单列 grid（grid-template-rows:repeat(2,auto)），模拟垂直流向
+    - _需求: 22.1_
+  - [x] 30.3 圆心圆形边框
     - G-compass::before 添加金色半透明圆形 border + radial-gradient 背景
     - _需求: 29.1_
 

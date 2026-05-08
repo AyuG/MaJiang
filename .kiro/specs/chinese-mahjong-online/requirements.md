@@ -400,9 +400,9 @@
 
 #### 验收标准
 
-1. THE Client_UI SHALL 将碰杠区（meld）作为中间层，grid 内容通过 padding 推至中心区域的外缘
-2. THE Client_UI SHALL 将弃牌区（river）作为内层，通过 inset 收缩内边使其更靠近圆心
-3. THE Client_UI SHALL 确保碰杠区与弃牌区互不重叠，形成视觉上的同心圆递进效果
+1. THE Client_UI SHALL 将碰杠区（meld）作为外层，grid 内容通过 `align-self:start/end` 和 `justify-self:start/end` 推至 grid 外缘（远离圆心）
+2. THE Client_UI SHALL 将弃牌区（river）作为内层，grid 内容通过 `align-self:end/start` 和 `justify-self:end/start` 拉至靠近圆心的内圈
+3. THE Client_UI SHALL 确保 meld 与 river 在同一 grid（`inset:0`）下通过 grid 定位区分层次，互不重叠
 
 ### 需求 31：积分面板可拖动
 
@@ -412,5 +412,16 @@
 
 1. THE Client_UI SHALL 支持通过 pointer 事件拖拽积分面板到任意位置
 2. WHEN Player 拖拽面板时，THE Client_UI SHALL 根据 bottom 定位正确计算 Y 轴位移，不出现反向移动
-3. WHEN Player 点击展开/收起按钮时，THE Client_UI SHALL 不触发拖拽操作（4px 阈值判定）
-4. THE Client_UI SHALL 确保拖拽过程中面板始终在视口内可操作
+3. WHEN Player 点击展开/收起按钮时，THE Client_UI SHALL 不触发拖拽操作（检测 `closest('button')` 跳过）
+4. THE Client_UI SHALL 使用 document 级 pointermove/pointerup 事件监听，避免 setPointerCapture 兼容性问题
+
+### 需求 32：上/下家弃牌碰杠牌 90° 旋转
+
+**用户故事：** 作为玩家，我希望从自己的视角看到上家和下家的弃牌/碰杠牌呈横置状态，模拟真实麻将桌的视角效果。
+
+#### 验收标准
+
+1. THE Client_UI SHALL 对上家（左侧玩家）的弃牌和碰杠 tile 应用 `transform:rotate(90deg)`
+2. THE Client_UI SHALL 对下家（右侧玩家）的弃牌和碰杠 tile 应用 `transform:rotate(-90deg)`
+3. THE Client_UI SHALL 将上/下家的弃牌区改为单列 grid，使 tiles 垂直排列
+4. THE Client_UI SHALL 确保旋转后的 tile 不因 `overflow:hidden` 被裁剪（`overflow:visible`）

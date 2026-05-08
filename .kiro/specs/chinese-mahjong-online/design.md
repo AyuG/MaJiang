@@ -255,11 +255,16 @@ interface RoomManager {
 
 牌桌中心区域（G-center）设计为三层同心圆结构，从外到内依次为：
 
-1. **中间层（Meld 碰杠区）**：`G-meld-layer`，`position:absolute; inset:0`，grid 内容通过 `clamp()` padding 推至外缘。上家/下家/对家/自碰杠牌分别置于 grid 的 top/left/right/self 区域。
-2. **内层（River 弃牌区）**：`G-river-layer`，`position:absolute; inset:clamp(3rem,6vh,5rem) clamp(1.5rem,4vw,3.5rem)`，grid 内容自动定位在更靠近圆心的内圈。
+1. **中间层（Meld 碰杠区）**：`G-meld-layer`，`position:absolute; inset:0`，通过 `align-self:start/end` 和 `justify-self:start/end` 将内容推至 grid 外缘（远离圆心）。上家/下家/对家/自碰杠牌分别置于 grid 的 top/left/right/self 区域。
+2. **内层（River 弃牌区）**：`G-river-layer`，`position:absolute; inset:0`（与 meld 同 grid），通过 `align-self:end/start` 和 `justify-self:end/start` 将内容拉至靠近圆心的内圈。
 3. **圆心（Compass 方位块）**：`G-compass`，`position:relative; z-index:1`，使用 `::before` 伪元素绘制金色半透明圆形边框及径向渐变背景。
 
 各层通过 `pointer-events:none` 确保点击穿透到手牌交互区。三层不重叠，形成视觉上的同心圆递进。
+
+**上/下家弃牌碰杠牌旋转**：
+- 上家（左侧玩家）弃牌/碰杠牌的 tile 应用 `transform:rotate(90deg)`，以当前玩家视角看到牌面横置
+- 下家（右侧玩家）弃牌/碰杠牌的 tile 应用 `transform:rotate(-90deg)`
+- 上/下家的弃牌区（river）改用单列 grid（`grid-template-rows:repeat(2,auto)`），模拟垂直流向
 
 ### 8. Socket 事件协议
 
