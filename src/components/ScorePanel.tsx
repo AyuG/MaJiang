@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 interface ScoreLogEntry {
   round: number;
@@ -22,26 +22,26 @@ export function ScorePanel({ myPlayerId, scoreLog, nicknames }: ScorePanelProps)
   const [pos, setPos] = useState({ x: 8, y: 8 });
   const dragging = useRef(false);
   const offset = useRef({ x: 0, y: 0 });
-  const dragStart = useRef({ x: 0, y: 0 });
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
-    dragging.current = false;
-    dragStart.current = { x: e.clientX, y: e.clientY };
+    if ((e.target as HTMLElement).closest('button')) return;
+    dragging.current = true;
     offset.current = { x: e.clientX - pos.x, y: e.clientY + pos.y };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, [pos]);
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (dragging.current) {
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      if (!dragging.current) return;
       setPos({ x: e.clientX - offset.current.x, y: offset.current.y - e.clientY });
-      return;
-    }
-    const dx = Math.abs(e.clientX - dragStart.current.x);
-    const dy = Math.abs(e.clientY - dragStart.current.y);
-    if (dx > 4 || dy > 4) dragging.current = true;
+    };
+    const onUp = () => { dragging.current = false; };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    return () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
   }, []);
-
-  const onPointerUp = useCallback(() => { dragging.current = false; }, []);
 
   const getSeatNick = (s: { playerId: string; seat: string }) => {
     const nick = nicknames?.[s.playerId];
@@ -52,7 +52,7 @@ export function ScorePanel({ myPlayerId, scoreLog, nicknames }: ScorePanelProps)
 
   return (
     <div className="sp-float" style={{ left: pos.x, bottom: pos.y }}
-      onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+      onPointerDown={onPointerDown}>
       <button className="sp-btn" onClick={() => setIsOpen(!isOpen)}>
         📊{isOpen ? '收起' : scoreLog.length}
       </button>

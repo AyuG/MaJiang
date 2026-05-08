@@ -67,7 +67,7 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   overflow:hidden;
 }
 
-/* Layer 2: Meld zone — middle ring (further from center) */
+/* Layer 2: Meld zone — outer ring (away from center, near edges) */
 .G-meld-layer{
   position:absolute;
   inset:0;
@@ -81,15 +81,15 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   pointer-events:none;
 }
 .G-meld-layer > div{pointer-events:auto}
-.G-meld-top{grid-area:top;display:flex;justify-content:center;align-items:flex-end;padding-bottom:clamp(2rem,4vh,3rem)}
-.G-meld-left{grid-area:left;display:flex;justify-content:flex-end;align-items:center;padding-right:clamp(1rem,2vw,2rem)}
-.G-meld-right{grid-area:right;display:flex;justify-content:flex-start;align-items:center;padding-left:clamp(1rem,2vw,2rem)}
-.G-meld-self{grid-area:self;display:flex;justify-content:center;align-items:flex-start;padding-top:clamp(2rem,4vh,3rem)}
+.G-meld-top{grid-area:top;display:flex;justify-content:center;align-items:flex-end;align-self:start}
+.G-meld-left{grid-area:left;display:flex;justify-content:flex-end;align-items:center;justify-self:start}
+.G-meld-right{grid-area:right;display:flex;justify-content:flex-start;align-items:center;justify-self:end}
+.G-meld-self{grid-area:self;display:flex;justify-content:center;align-items:flex-start;align-self:end}
 
 /* Layer 3: River zone — inner ring (closer to center) */
 .G-river-layer{
   position:absolute;
-  inset:clamp(3rem,6vh,5rem) clamp(1.5rem,4vw,3.5rem);
+  inset:0;
   display:grid;
   grid-template-areas:
     ".    top    ."
@@ -100,10 +100,10 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   pointer-events:none;
 }
 .G-river-layer > div{pointer-events:auto}
-.G-river-top{grid-area:top;display:flex;justify-content:center;align-items:center}
-.G-river-left{grid-area:left;display:flex;justify-content:center;align-items:center}
-.G-river-right{grid-area:right;display:flex;justify-content:center;align-items:center}
-.G-river-self{grid-area:self;display:flex;justify-content:center;align-items:center}
+.G-river-top{grid-area:top;display:flex;justify-content:center;align-items:center;align-self:end}
+.G-river-left{grid-area:left;display:flex;justify-content:center;align-items:center;justify-self:end}
+.G-river-right{grid-area:right;display:flex;justify-content:center;align-items:center;justify-self:start}
+.G-river-self{grid-area:self;display:flex;justify-content:center;align-items:center;align-self:start}
 
 /* Compass (center) */
 .G-compass{
@@ -133,13 +133,19 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
 .plbl-ic{font-size:.8rem}
 
 /* Hand */
-.G-hand{display:flex;justify-content:center;gap:2px;width:100%;max-width:100vw;padding:0 2px;z-index:50;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
+.G-hand{display:flex;justify-content:center;gap:2px;width:100%;max-width:100vw;padding:10px 2px 0;z-index:50;overflow-x:auto;overflow-y:visible;scrollbar-width:none;-ms-overflow-style:none}
 .G-hand::-webkit-scrollbar{display:none}
 
-/* River (6 per row) */
+/* River (horizontal: self + top use 6-per-row grid) */
 .river{display:grid;grid-template-columns:repeat(6,auto);gap:1px;justify-content:center}
 
-/* Meld zone - middle layer between hand and river */
+/* River (vertical: left/right players) — single column, tiles flow toward center */
+.G-river-left .river{grid-template-columns:auto;grid-template-rows:repeat(2,auto);justify-content:end}
+.G-river-right .river{grid-template-columns:auto;grid-template-rows:repeat(2,auto);justify-content:start}
+.G-river-left .river .tile{transform:rotate(90deg);overflow:visible}
+.G-river-right .river .tile{transform:rotate(-90deg);overflow:visible}
+
+/* Meld zone */
 .meld-zone{display:flex;gap:2px;align-items:flex-end}
 .meld-row{display:flex;gap:4px;flex-wrap:wrap;align-items:flex-end}
 .meld-row-self{flex-direction:row}
@@ -150,6 +156,10 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
 .meld-group.meld-peng,.meld-group.meld-ming_gang{flex-direction:row}
 .meld-group.meld-an-gang{flex-direction:row}
 .meld-group.meld-bu-gang{flex-direction:row;position:relative}
+
+/* Side meld tiles: rotate so tiles face the current player sideways */
+.G-meld-left .meld-group .tile{transform:rotate(90deg);overflow:visible}
+.G-meld-right .meld-group .tile{transform:rotate(-90deg);overflow:visible}
 .meld-extra{margin-left:-40%;margin-top:-25%;position:relative;z-index:1}
 
 /* ═══ COMPASS ═══ */
