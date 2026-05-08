@@ -251,7 +251,17 @@ interface RoomManager {
 }
 ```
 
-### 7. Socket 事件协议
+### 7. 牌桌同心圆布局
+
+牌桌中心区域（G-center）设计为三层同心圆结构，从外到内依次为：
+
+1. **中间层（Meld 碰杠区）**：`G-meld-layer`，`position:absolute; inset:0`，grid 内容通过 `clamp()` padding 推至外缘。上家/下家/对家/自碰杠牌分别置于 grid 的 top/left/right/self 区域。
+2. **内层（River 弃牌区）**：`G-river-layer`，`position:absolute; inset:clamp(3rem,6vh,5rem) clamp(1.5rem,4vw,3.5rem)`，grid 内容自动定位在更靠近圆心的内圈。
+3. **圆心（Compass 方位块）**：`G-compass`，`position:relative; z-index:1`，使用 `::before` 伪元素绘制金色半透明圆形边框及径向渐变背景。
+
+各层通过 `pointer-events:none` 确保点击穿透到手牌交互区。三层不重叠，形成视觉上的同心圆递进。
+
+### 8. Socket 事件协议
 
 ```typescript
 // 客户端 → 服务端

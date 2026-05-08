@@ -22,16 +22,23 @@ export function ScorePanel({ myPlayerId, scoreLog, nicknames }: ScorePanelProps)
   const [pos, setPos] = useState({ x: 8, y: 8 });
   const dragging = useRef(false);
   const offset = useRef({ x: 0, y: 0 });
+  const dragStart = useRef({ x: 0, y: 0 });
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
-    dragging.current = true;
-    offset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+    dragging.current = false;
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    offset.current = { x: e.clientX - pos.x, y: e.clientY + pos.y };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, [pos]);
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragging.current) return;
-    setPos({ x: e.clientX - offset.current.x, y: e.clientY - offset.current.y });
+    if (dragging.current) {
+      setPos({ x: e.clientX - offset.current.x, y: offset.current.y - e.clientY });
+      return;
+    }
+    const dx = Math.abs(e.clientX - dragStart.current.x);
+    const dy = Math.abs(e.clientY - dragStart.current.y);
+    if (dx > 4 || dy > 4) dragging.current = true;
   }, []);
 
   const onPointerUp = useCallback(() => { dragging.current = false; }, []);

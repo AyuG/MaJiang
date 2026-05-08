@@ -293,6 +293,8 @@
 3. THE Client_UI SHALL 压缩游戏棋盘中间区域的空闲面积，使四位玩家区域紧凑排列
 4. THE Client_UI SHALL 在 480px 以下屏幕宽度时进一步缩小牌面和按钮尺寸
 5. THE Client_UI SHALL 使用 `100dvh`（动态视口高度）确保在移动浏览器中不出现地址栏遮挡
+6. THE Client_UI SHALL 在手牌容器添加 `overflow-x:auto`，当手牌 14 张超宽时可横向滚动
+7. THE Client_UI SHALL 在 480px 以下断点进一步压缩 tile-lg 尺寸，确保手牌在窄屏下尽量不溢出
 
 ### 需求 21：出牌二次确认
 
@@ -390,3 +392,25 @@
 1. THE Client_UI SHALL 在牌桌正中央显示紫色四方块，四角显示東南西北（基于本地玩家视角）
 2. WHEN 某位 Player 的回合到来时，THE Client_UI SHALL 对该方位执行 opacity 闪烁动画
 3. THE Client_UI SHALL 在四方块圆心实时显示牌墙剩余数和当前局数
+4. THE Client_UI SHALL 在 compass 外围绘制金色半透明圆形边框，配合径向渐变背景形成视觉聚焦
+
+### 需求 30：牌桌同心圆布局
+
+**用户故事：** 作为玩家，我希望弃牌区和碰杠区在牌桌中心呈现清晰的层次关系，不互相遮挡。
+
+#### 验收标准
+
+1. THE Client_UI SHALL 将碰杠区（meld）作为中间层，grid 内容通过 padding 推至中心区域的外缘
+2. THE Client_UI SHALL 将弃牌区（river）作为内层，通过 inset 收缩内边使其更靠近圆心
+3. THE Client_UI SHALL 确保碰杠区与弃牌区互不重叠，形成视觉上的同心圆递进效果
+
+### 需求 31：积分面板可拖动
+
+**用户故事：** 作为玩家，我希望积分面板可以任意拖动位置，且在拖动后仍能正常展开/收起。
+
+#### 验收标准
+
+1. THE Client_UI SHALL 支持通过 pointer 事件拖拽积分面板到任意位置
+2. WHEN Player 拖拽面板时，THE Client_UI SHALL 根据 bottom 定位正确计算 Y 轴位移，不出现反向移动
+3. WHEN Player 点击展开/收起按钮时，THE Client_UI SHALL 不触发拖拽操作（4px 阈值判定）
+4. THE Client_UI SHALL 确保拖拽过程中面板始终在视口内可操作

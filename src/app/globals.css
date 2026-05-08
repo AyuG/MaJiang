@@ -44,7 +44,7 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   grid-template-areas:
     ".    top    ."
     "left center right"
-    ".    bot    .";
+    "bot   bot   bot";
   grid-template-columns:auto 1fr auto;
   grid-template-rows:auto 1fr auto;
   overflow:hidden;
@@ -67,7 +67,7 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   overflow:hidden;
 }
 
-/* Layer 2: Meld zone (middle layer) */
+/* Layer 2: Meld zone — middle ring (further from center) */
 .G-meld-layer{
   position:absolute;
   inset:0;
@@ -81,15 +81,15 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   pointer-events:none;
 }
 .G-meld-layer > div{pointer-events:auto}
-.G-meld-top{grid-area:top;display:flex;justify-content:center;align-items:flex-end;padding-bottom:4px}
-.G-meld-left{grid-area:left;display:flex;justify-content:flex-end;align-items:center;padding-right:4px}
-.G-meld-right{grid-area:right;display:flex;justify-content:flex-start;align-items:center;padding-left:4px}
-.G-meld-self{grid-area:self;display:flex;justify-content:center;align-items:flex-start;padding-top:4px}
+.G-meld-top{grid-area:top;display:flex;justify-content:center;align-items:flex-end;padding-bottom:clamp(2rem,4vh,3rem)}
+.G-meld-left{grid-area:left;display:flex;justify-content:flex-end;align-items:center;padding-right:clamp(1rem,2vw,2rem)}
+.G-meld-right{grid-area:right;display:flex;justify-content:flex-start;align-items:center;padding-left:clamp(1rem,2vw,2rem)}
+.G-meld-self{grid-area:self;display:flex;justify-content:center;align-items:flex-start;padding-top:clamp(2rem,4vh,3rem)}
 
-/* Layer 3: River zone (inner layer) */
+/* Layer 3: River zone — inner ring (closer to center) */
 .G-river-layer{
   position:absolute;
-  inset:0;
+  inset:clamp(3rem,6vh,5rem) clamp(1.5rem,4vw,3.5rem);
   display:grid;
   grid-template-areas:
     ".    top    ."
@@ -109,6 +109,19 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
 .G-compass{
   position:relative;
   z-index:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.G-compass::before{
+  content:'';
+  position:absolute;
+  width:clamp(5.5rem,16vw,8.5rem);
+  height:clamp(5.5rem,16vw,8.5rem);
+  border-radius:50%;
+  border:2px solid rgba(255,215,0,.2);
+  background:radial-gradient(circle,rgba(0,40,0,.25) 0%,transparent 100%);
+  pointer-events:none;
 }
 
 /* Player label */
@@ -120,7 +133,8 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
 .plbl-ic{font-size:.8rem}
 
 /* Hand */
-.G-hand{display:flex;justify-content:center;gap:2px;width:100%;max-width:100vw;padding:0 2px;z-index:50}
+.G-hand{display:flex;justify-content:center;gap:2px;width:100%;max-width:100vw;padding:0 2px;z-index:50;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
+.G-hand::-webkit-scrollbar{display:none}
 
 /* River (6 per row) */
 .river{display:grid;grid-template-columns:repeat(6,auto);gap:1px;justify-content:center}
@@ -222,10 +236,10 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   .sp-body{max-width:220px;font-size:.7rem}
 }
 @media(max-width:480px){
-  .tile-lg{width:clamp(1.3rem,calc(100vw/17),2rem);height:clamp(1.7rem,calc(100vw/13),2.6rem)}
-  .tile-sm{width:clamp(.75rem,2vw,1rem);height:clamp(1rem,2.5vw,1.3rem)}
-  .plbl{font-size:.65rem}
+  .tile-lg{width:clamp(1.2rem,calc(100vw/19),1.8rem);height:clamp(1.6rem,calc(100vw/14),2.3rem)}
+  .tile-sm{width:clamp(.7rem,1.8vw,.9rem);height:clamp(.9rem,2.3vw,1.2rem)}
+  .plbl{font-size:.6rem}
   .action-btn{padding:.15rem .45rem;font-size:.78rem}
-  .cp-dir{width:1.7rem;height:1.1rem;font-size:.7rem}
-  .cp-center{width:2.2rem;font-size:.8rem}
+  .cp-dir{width:1.5rem;height:1rem;font-size:.65rem}
+  .cp-center{width:2rem;font-size:.75rem}
 }
