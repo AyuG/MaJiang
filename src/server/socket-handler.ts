@@ -56,6 +56,7 @@ export function setupSocketHandlers(
 ): void {
   const socketMap = new Map<string, SocketMapping>();
   const roundCounters = new Map<string, number>();
+  const pendingNewGameRooms = new Map<string, Array<{ id: string; seat: import('@/server/room-manager').SeatPosition }>>();
 
   // Create TurnTimer with callback that uses broadcastGameState
   const turnTimer = new TurnTimer(async (roomId, playerId, phase) => {
@@ -82,6 +83,14 @@ export function setupSocketHandlers(
     turnTimer.clear(roomId);
     roundCounters.delete(roomId);
 
+    // Capture socket mappings before clearing (needed for potential new-game creation)
+    const roomSockets: Array<{ sid: string; pid: string }> = [];
+    for (const [sid, m] of socketMap.entries()) {
+      if (m.roomId === roomId) {
+        roomSockets.push({ sid, pid: m.playerId });
+      }
+    }
+
     let scoreHistory: unknown[] = [];
     try {
       const log = await gameController['redisStore'].getScoreLog(roomId);
@@ -97,12 +106,35 @@ export function setupSocketHandlers(
 
     const history = scoreHistory.length > 0 ? scoreHistory as Array<{ round: number; result: string; scores: Array<{ seat: string; delta: number }> }> : undefined;
     io.to(roomId).emit('room:dissolved', history);
-    for (const [sid, m] of socketMap.entries()) {
-      if (m.roomId === roomId) {
-        const s = io.sockets.sockets.get(sid);
-        if (s) s.leave(roomId);
-        socketMap.delete(sid);
-      }
+    for (const { sid } of roomSockets) {
+      const s = io.sockets.sockets.get(sid);
+      if (s) s.leave(roomId);
+      socketMap.delete(sid);
+    }
+
+    // Check if this dissolve was triggered by a new-game vote
+    const newGamePlayers = pendingNewGameRooms.get(roomId);
+    if (newGamePlayers) {
+      pendingNewGameRooms.delete(roomId);
+      setTimeout(async () => {
+        try {
+          const playersToCopy = newGamePlayers.map((p) => ({ id: p.id, seat: p.seat }));
+          const newRoomId = roomManager.createRoomWithPlayers(playersToCopy);
+          for (const p of playersToCopy) {
+            try { roomManager.setReady(newRoomId, p.id); } catch { /* ignore */ }
+          }
+          // Re-assign sockets to new room
+          for (const { sid, pid } of roomSockets) {
+            socketMap.set(sid, { roomId: newRoomId, playerId: pid });
+            const s = io.sockets.sockets.get(sid);
+            if (s) s.join(newRoomId);
+          }
+          broadcastRoomSync(newRoomId);
+          io.to(newRoomId).emit('room:new-game-created', newRoomId);
+        } catch (err) {
+          logger.error('dissolveWithScores', 'Failed to create new game', err);
+        }
+      }, 600);
     }
   }
 
@@ -451,53 +483,33 @@ export function setupSocketHandlers(
       }
     });
 
-    // ── New game: copy players to new room, keep seats ─
+    // ── New game: vote to create new room with same players ─
     socket.on('room:new-game', async () => {
       const mapping = socketMap.get(socket.id);
       if (!mapping) return;
-      const oldRoomId = mapping.roomId;
-      const room = roomManager.getRoom(oldRoomId);
+      const room = roomManager.getRoom(mapping.roomId);
       if (!room) return;
       if (room.players.length < 2) return;
 
-      // Build player list preserving seats
-      const playersToCopy = room.players.map((p) => ({ id: p.id, seat: p.seat }));
+      // Store players for post-dissolve new game creation
+      pendingNewGameRooms.set(mapping.roomId, [...room.players.map((p) => ({ id: p.id, seat: p.seat }))]);
 
-      // Create new room with same players
-      const newRoomId = roomManager.createRoomWithPlayers(playersToCopy);
-
-      // Set all players ready in new room
-      for (const p of playersToCopy) {
-        try { roomManager.setReady(newRoomId, p.id); } catch { /* ignore */ }
-      }
-
-      // Dissolve old room
-      await dissolveWithScores(oldRoomId);
-
-      // Move all sockets to new room
-      const newRoomSockets: Array<{ sid: string; pid: string }> = [];
-      for (const [sid, m] of socketMap.entries()) {
-        if (m.roomId === oldRoomId) {
-          // Don't move yet — oldRoomId still active, need to update mapping
-          newRoomSockets.push({ sid, pid: m.playerId });
+      // Trigger vote dissolve (same flow as dissolve button)
+      try {
+        roomManager.initiateVoteDissolve(mapping.roomId, mapping.playerId);
+        const voteResult = roomManager.checkVoteResolved(mapping.roomId);
+        if (voteResult && voteResult.dissolved) {
+          await dissolveWithScores(mapping.roomId);
+          return;
         }
-      }
-
-      // Update socket mappings and join new room
-      for (const { sid, pid } of newRoomSockets) {
-        socketMap.set(sid, { roomId: newRoomId, playerId: pid });
-        const s = io.sockets.sockets.get(sid);
-        if (s) {
-          s.leave(oldRoomId);
-          s.join(newRoomId);
+        if (voteResult && !voteResult.dissolved) {
+          pendingNewGameRooms.delete(mapping.roomId);
         }
+        io.to(mapping.roomId).emit('room:vote-dissolve-request', mapping.playerId);
+      } catch (err) {
+        pendingNewGameRooms.delete(mapping.roomId);
+        logger.warn('room:new-game', 'New game vote failed', err);
       }
-
-      // Broadcast sync to all in new room
-      broadcastRoomSync(newRoomId);
-
-      // Notify initiator (room:new-game-created) and broadcast sync
-      io.to(newRoomId).emit('room:new-game-created', newRoomId);
     });
 
     // ── Game actions ─────────────────────────────────
@@ -591,9 +603,15 @@ export function setupSocketHandlers(
         const result = roomManager.voteDissolve(mapping.roomId, mapping.playerId, agree);
         if (result.dissolved) {
           await dissolveWithScores(mapping.roomId);
-        } else if (!agree) {
-          // Someone rejected — notify all to close vote dialog
-          io.to(mapping.roomId).emit('room:vote-dissolve-rejected');
+        } else {
+          // Clean up pending new-game when vote is resolved (not pending)
+          const room = roomManager.getRoom(mapping.roomId);
+          if (room && Object.keys(result.votes).length >= room.players.length) {
+            pendingNewGameRooms.delete(mapping.roomId);
+          }
+          if (!agree) {
+            io.to(mapping.roomId).emit('room:vote-dissolve-rejected');
+          }
         }
       } catch (err) {
         logger.warn('room:vote-dissolve-reply', 'Vote reply failed', err);

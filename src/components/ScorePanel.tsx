@@ -26,7 +26,6 @@ export function ScorePanel({ scoreLog, nicknames, modal, onClose }: ScorePanelPr
         <table style={{ width: '100%', borderCollapse: 'collapse', color: '#d4d4d4' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid #374151' }}>
-              <th style={th}>序号</th>
               <th style={th}>房间号</th>
               <th style={th}>局数</th>
               <th style={th}>东-积分</th>
@@ -39,7 +38,6 @@ export function ScorePanel({ scoreLog, nicknames, modal, onClose }: ScorePanelPr
           <tbody>
             {scoreLog.map((entry, idx) => (
               <tr key={idx} style={{ borderBottom: '1px solid #1f2937' }}>
-                <td style={td}>{idx + 1}</td>
                 <td style={{ ...td, color: '#63b3ed' }}>{entry.roomId}</td>
                 <td style={td}>第{entry.round}局</td>
                 {SEATS.map((seat) => {

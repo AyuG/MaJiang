@@ -98,7 +98,7 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
         <span className={selfI === cur ? 'hd-my' : ''}>
           ▶ {cur === myIdx ? '你' : SEATS[cur]}出牌
         </span>
-        <button className="hd-btn" onClick={onShowScores}>积分记录</button>
+        <button className="hd-btn" onClick={onShowScores}>积分</button>
         <button className="hd-btn" onClick={onVoteDissolve}>解散</button>
         <button className="hd-btn" onClick={onNewGame}>新房</button>
       </header>
@@ -140,6 +140,9 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
 
         {/* ── Layer 1: Self hand (outermost) ── */}
         <div className="G-bot">
+          <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: '2px' }}>
+            <PLabel i={selfI} />
+          </div>
           {children}
           <div className="G-hand">
             {sorted.map((t) => (
