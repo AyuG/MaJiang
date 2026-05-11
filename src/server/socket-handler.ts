@@ -105,36 +105,48 @@ export function setupSocketHandlers(
     }
 
     const history = scoreHistory.length > 0 ? scoreHistory as Array<{ round: number; result: string; scores: Array<{ seat: string; delta: number }> }> : undefined;
+
+    // Check if this dissolve should create a new game
+    const newGamePlayers = pendingNewGameRooms.get(roomId);
+    if (newGamePlayers) {
+      pendingNewGameRooms.delete(roomId);
+      try {
+        // Create new room BEFORE dissolving old one
+        const playersToCopy = newGamePlayers.map((p) => ({ id: p.id, seat: p.seat }));
+        const newRoomId = roomManager.createRoomWithPlayers(playersToCopy);
+        for (const p of playersToCopy) {
+          try { roomManager.setReady(newRoomId, p.id); } catch { /* ignore */ }
+        }
+
+        // Emit dissolved to old room first (sockets still in old room)
+        io.to(roomId).emit('room:dissolved', history);
+
+        // Move sockets from old room to new room
+        for (const { sid, pid } of roomSockets) {
+          const s = io.sockets.sockets.get(sid);
+          if (s) {
+            s.leave(roomId);
+            s.join(newRoomId);
+          }
+          socketMap.set(sid, { roomId: newRoomId, playerId: pid });
+        }
+
+        // Broadcast new room sync
+        broadcastRoomSync(newRoomId);
+        io.to(newRoomId).emit('room:new-game-created', newRoomId);
+        return;
+      } catch (err) {
+        logger.error('dissolveWithScores', 'Failed to create new game, falling back to normal dissolve', err);
+        // Fall through to normal dissolve
+      }
+    }
+
+    // Normal dissolve (no new game)
     io.to(roomId).emit('room:dissolved', history);
     for (const { sid } of roomSockets) {
       const s = io.sockets.sockets.get(sid);
       if (s) s.leave(roomId);
       socketMap.delete(sid);
-    }
-
-    // Check if this dissolve was triggered by a new-game vote
-    const newGamePlayers = pendingNewGameRooms.get(roomId);
-    if (newGamePlayers) {
-      pendingNewGameRooms.delete(roomId);
-      setTimeout(async () => {
-        try {
-          const playersToCopy = newGamePlayers.map((p) => ({ id: p.id, seat: p.seat }));
-          const newRoomId = roomManager.createRoomWithPlayers(playersToCopy);
-          for (const p of playersToCopy) {
-            try { roomManager.setReady(newRoomId, p.id); } catch { /* ignore */ }
-          }
-          // Re-assign sockets to new room
-          for (const { sid, pid } of roomSockets) {
-            socketMap.set(sid, { roomId: newRoomId, playerId: pid });
-            const s = io.sockets.sockets.get(sid);
-            if (s) s.join(newRoomId);
-          }
-          broadcastRoomSync(newRoomId);
-          io.to(newRoomId).emit('room:new-game-created', newRoomId);
-        } catch (err) {
-          logger.error('dissolveWithScores', 'Failed to create new game', err);
-        }
-      }, 600);
     }
   }
 
