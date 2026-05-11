@@ -9,6 +9,21 @@ import { PauseOverlay } from '@/components/PauseOverlay';
 import { ScorePanel } from '@/components/ScorePanel';
 import type { RoomSyncData } from '@/types';
 
+const NICKNAME_STORAGE_KEY = 'mj_nicknames';
+
+function loadNicknames(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(NICKNAME_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveNicknames(map: Record<string, string>) {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(NICKNAME_STORAGE_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+}
+
 export default function Home() {
   const {
     socket,
@@ -130,12 +145,14 @@ export default function Home() {
   const gameOver = gameState && (gameState.phase === 'WIN' || gameState.phase === 'DRAW');
   const myPlayerId = playerId;
 
-  // Build nicknames map from roomSync for ScorePanel
-  const nicknames: Record<string, string> = {};
+  // Build nicknames map from roomSync + localStorage for ScorePanel
+  const nicknames: Record<string, string> = loadNicknames();
   if (roomSync) {
     for (const p of roomSync.players) {
-      nicknames[p.id] = p.nickname || p.id.slice(0, 8);
+      const nick = p.nickname || p.id.slice(0, 8);
+      nicknames[p.id] = nick;
     }
+    saveNicknames(nicknames);
   }
 
   // Score modal (shared across views)

@@ -7,6 +7,14 @@ import { ActionBar } from '@/components/ActionBar';
 import { PauseOverlay } from '@/components/PauseOverlay';
 import { ScorePanel } from '@/components/ScorePanel';
 
+function loadNicknames(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem('mj_nicknames');
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
 export default function GamePage() {
   const {
     playerId,
@@ -26,6 +34,7 @@ export default function GamePage() {
 
   const [showScores, setShowScores] = useState(false);
   const myPlayerId = playerId;
+  const nicknames = loadNicknames();
 
   if (!gameState) {
     return (
@@ -63,6 +72,7 @@ export default function GamePage() {
       {showScores && (
         <ScorePanel
           scoreLog={scoreLog}
+          nicknames={nicknames}
           modal
           onClose={() => setShowScores(false)}
         />
