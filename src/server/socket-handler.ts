@@ -119,7 +119,7 @@ export function setupSocketHandlers(
         }
 
         // Emit dissolved to old room first (sockets still in old room)
-        io.to(roomId).emit('room:dissolved', history);
+        io.to(roomId).emit('room:dissolved', { roomId, scoreHistory: history });
 
         // Move sockets from old room to new room
         for (const { sid, pid } of roomSockets) {
@@ -142,7 +142,7 @@ export function setupSocketHandlers(
     }
 
     // Normal dissolve (no new game)
-    io.to(roomId).emit('room:dissolved', history);
+    io.to(roomId).emit('room:dissolved', { roomId, scoreHistory: history });
     for (const { sid } of roomSockets) {
       const s = io.sockets.sockets.get(sid);
       if (s) s.leave(roomId);
@@ -182,7 +182,7 @@ export function setupSocketHandlers(
         }
       } catch (err) {
         logger.error('handleRoundEnd', 'Failed to start new round', err);
-        io.to(roomId).emit('room:dissolved');
+        io.to(roomId).emit('room:dissolved', { roomId });
       }
     }, 5000);
   }
@@ -481,7 +481,7 @@ export function setupSocketHandlers(
       const { roomId, playerId } = mapping;
       try {
         roomManager.dissolveRoom(roomId, playerId);
-        io.to(roomId).emit('room:dissolved');
+        io.to(roomId).emit('room:dissolved', { roomId });
         // Clean up all socket mappings for this room
         for (const [sid, m] of socketMap.entries()) {
           if (m.roomId === roomId) {

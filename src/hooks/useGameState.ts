@@ -163,11 +163,12 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
       setDiceResult(data);
     };
 
-    const onDissolved = (_scoreHistory?: Array<{ round: number; result: string; scores: Array<{ seat: string; delta: number }> }>) => {
+    const onDissolved = (data?: { roomId: string; scoreHistory?: Array<{ round: number; result: string; scores: Array<{ seat: string; delta: number }> }> }) => {
+      const dissolvedRoomId = data?.roomId ?? roomId;
       // Mark all entries for this room as finished
       setScoreLog((prev) => {
         const updated = prev.map((e) =>
-          e.roomId === roomId ? { ...e, status: 'finished' as const } : e,
+          e.roomId === dissolvedRoomId ? { ...e, status: 'finished' as const } : e,
         );
         saveScoreHistory(updated);
         return updated;
