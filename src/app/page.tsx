@@ -37,6 +37,7 @@ export default function Home() {
     voteDissolve,
     leaveRoom,
     changeNickname,
+    newGame,
   } = useMahjongSocket();
 
   const handleLeaveRoom = useCallback(() => {
@@ -49,6 +50,7 @@ export default function Home() {
   const [roomSync, setRoomSync] = useState<RoomSyncData | null>(null);
   const [voteInitiator, setVoteInitiator] = useState<string | null>(null);
   const [roomError, setRoomError] = useState<string | null>(null);
+  const [showScores, setShowScores] = useState(false);
 
   // Auto-join from invite link (?room=XXXXXX)
   useEffect(() => {
@@ -57,7 +59,6 @@ export default function Home() {
     const inviteRoom = params.get('room');
     if (inviteRoom && inviteRoom.length >= 4) {
       joinRoom(inviteRoom);
-      // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, [isConnected, localRoomId, roomId, joinRoom]);
@@ -68,7 +69,7 @@ export default function Home() {
     const onCreated = (id: string) => setLocalRoomId(id);
     const onSync = (data: RoomSyncData) => {
       setRoomSync(data);
-      setLocalRoomId(data.roomId); // confirm we're in this room
+      setLocalRoomId(data.roomId);
     };
     const onKicked = (targetId: string) => {
       if (targetId === socket.id) {
@@ -91,6 +92,9 @@ export default function Home() {
     const onVoteRejected = () => {
       setVoteInitiator(null);
     };
+    const onNewGameCreated = (newRoomId: string) => {
+      setLocalRoomId(newRoomId);
+    };
 
     socket.on('room:created', onCreated);
     socket.on('room:sync', onSync);
@@ -99,6 +103,7 @@ export default function Home() {
     socket.on('room:vote-dissolve-request', onVoteRequest);
     socket.on('room:error', onRoomError);
     socket.on('room:vote-dissolve-rejected', onVoteRejected);
+    socket.on('room:new-game-created', onNewGameCreated);
 
     return () => {
       socket.off('room:created', onCreated);
@@ -108,13 +113,13 @@ export default function Home() {
       socket.off('room:vote-dissolve-request', onVoteRequest);
       socket.off('room:error', onRoomError);
       socket.off('room:vote-dissolve-rejected', onVoteRejected);
+      socket.off('room:new-game-created', onNewGameCreated);
     };
   }, [socket]);
 
   const handleJoinRoom = useCallback(
     (id: string) => {
       setRoomError(null);
-      // Don't set localRoomId yet — wait for room:sync to confirm
       joinRoom(id);
     },
     [joinRoom],
@@ -125,14 +130,31 @@ export default function Home() {
   const gameOver = gameState && (gameState.phase === 'WIN' || gameState.phase === 'DRAW');
   const myPlayerId = playerId;
 
+  // Build nicknames map from roomSync for ScorePanel
+  const nicknames: Record<string, string> = {};
+  if (roomSync) {
+    for (const p of roomSync.players) {
+      nicknames[p.id] = p.nickname || p.id.slice(0, 8);
+    }
+  }
+
+  // Score modal (shared across views)
+  const scoreModal = showScores ? (
+    <ScorePanel
+      scoreLog={scoreLog}
+      nicknames={nicknames}
+      modal
+      onClose={() => setShowScores(false)}
+    />
+  ) : null;
+
+  // --- GAME OVER view ---
   if (gameOver && gameState) {
-    // Derive score info from gameState players
     const players = gameState.players;
     const winner = gameState.phase === 'WIN'
       ? players.reduce((best, p) => (p.score > best.score ? p : best), players[0])
       : null;
     
-    // Get nickname from roomSync for display
     const getPlayerDisplayName = (playerId: string) => {
       if (playerId === myPlayerId) return '你';
       const player = roomSync?.players.find(p => p.id === playerId);
@@ -144,7 +166,7 @@ export default function Home() {
         <div className="lobby">
           {gameState.phase === 'WIN' && (
             <>
-              <h2>🎉 游戏结束</h2>
+              <h2>游戏结束</h2>
               {winner && <div style={{ fontSize: '1.2rem', color: '#ffd700', marginBottom: '0.5rem' }}>
                 胜者: {getPlayerDisplayName(winner.id)}
               </div>}
@@ -164,10 +186,12 @@ export default function Home() {
             </>
           )}
         </div>
+        {scoreModal}
       </main>
     );
   }
 
+  // --- IN-GAME view ---
   if (inGame && gameState) {
     return (
       <main>
@@ -177,6 +201,8 @@ export default function Home() {
           roomId={effectiveRoomId ?? undefined}
           onTileClick={discard}
           onVoteDissolve={voteDissolve}
+          onShowScores={() => setShowScores(true)}
+          onNewGame={newGame}
         >
           <ActionBar
             availableActions={availableActions}
@@ -207,14 +233,12 @@ export default function Home() {
           </div>
         )}
         {gameState.isPaused && <PauseOverlay gameState={gameState} />}
-        <ScorePanel
-          myPlayerId={myPlayerId}
-          scoreLog={scoreLog}
-        />
+        {scoreModal}
       </main>
     );
   }
 
+  // --- LOBBY view ---
   return (
     <main>
       <Lobby
@@ -233,28 +257,30 @@ export default function Home() {
         onStart={startGame}
         onLeaveRoom={handleLeaveRoom}
         onChangeNickname={changeNickname}
+        onShowScores={() => setShowScores(true)}
       />
       {diceResult && !gameState && (
         <div className="dice-overlay">
           <div className="dice-content">
-            <h2>🎲 掷骰子定庄</h2>
+            <h2>掷骰子定庄</h2>
             <div className="dice-rolls">
               {['东', '南', '西', '北'].map((seat, i) => (
                 <div key={i} className={`dice-player${i === diceResult.dealerIndex ? ' dice-winner' : ''}`}>
                   {seat}: {diceResult.rolls[i] || '-'} 点
-                  {i === diceResult.dealerIndex && ' 👑庄家'}
+                  {i === diceResult.dealerIndex && ' 庄家'}
                 </div>
               ))}
             </div>
           </div>
         </div>
       )}
-      {scoreLog.length > 0 && !gameState && (
+      {scoreLog.length > 0 && !gameState && !showScores && (
         <ScorePanel
-          myPlayerId={myPlayerId}
           scoreLog={scoreLog}
+          nicknames={nicknames}
         />
       )}
+      {scoreModal}
     </main>
   );
 }

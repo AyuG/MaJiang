@@ -98,6 +98,10 @@ export function useMahjongSocket() {
     }
   }, [socket]);
 
+  const newGame = useCallback(() => {
+    socket?.emit('room:new-game');
+  }, [socket]);
+
   return {
     socket,
     isConnected,
@@ -126,5 +130,6 @@ export function useMahjongSocket() {
     voteDissolveReply,
     leaveRoom,
     changeNickname,
+    newGame,
   };
 }

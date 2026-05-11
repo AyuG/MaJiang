@@ -20,10 +20,26 @@ export interface DiceInfo {
 
 export interface ScoreLogEntry {
   round: number;
-  roomId?: string;
+  roomId: string;
   result: 'win' | 'draw';
   winnerId?: string;
   scores: Array<{ playerId: string; seat: string; delta: number }>;
+  status: 'playing' | 'finished';
+}
+
+const STORAGE_KEY = 'mj_score_history';
+
+function loadScoreHistory(): ScoreLogEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveScoreHistory(log: ScoreLogEntry[]) {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); } catch { /* quota exceeded, ignore */ }
 }
 
 export interface GameStateHook {
@@ -41,7 +57,7 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
   const [roomId, setRoomId] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [diceResult, setDiceResult] = useState<DiceInfo | null>(null);
-  const [scoreLog, setScoreLog] = useState<ScoreLogEntry[]>([]);
+  const [scoreLog, setScoreLog] = useState<ScoreLogEntry[]>(() => loadScoreHistory());
   const prevScoresRef = useRef<Map<string, number>>(new Map());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -101,13 +117,19 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
           const winner = state.phase === 'WIN'
             ? state.players.reduce((best, p) => p.score > best.score ? p : best, state.players[0])
             : null;
-          setScoreLog((log) => [...log, {
-            round: state.roundNumber ?? log.length + 1,
-            roomId: state.roomId,
-            result: state.phase === 'WIN' ? 'win' : 'draw',
-            winnerId: winner?.id,
-            scores: deltas,
-          }]);
+          setScoreLog((log) => {
+            const entry: ScoreLogEntry = {
+              round: state.roundNumber ?? log.length + 1,
+              roomId: state.roomId,
+              result: state.phase === 'WIN' ? 'win' : 'draw',
+              winnerId: winner?.id,
+              scores: deltas,
+              status: 'playing',
+            };
+            const updated = [...log, entry];
+            saveScoreHistory(updated);
+            return updated;
+          });
         }
 
         // Snapshot current scores for next round delta calculation
@@ -135,6 +157,14 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
     };
 
     const onDissolved = (_scoreHistory?: Array<{ round: number; result: string; scores: Array<{ seat: string; delta: number }> }>) => {
+      // Mark all entries for this room as finished
+      setScoreLog((prev) => {
+        const updated = prev.map((e) =>
+          e.roomId === roomId ? { ...e, status: 'finished' as const } : e,
+        );
+        saveScoreHistory(updated);
+        return updated;
+      });
       setGameState(null);
       setRoomId(null);
       setDiceResult(null);

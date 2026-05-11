@@ -48,6 +48,7 @@ export interface ClientEvents {
   'game:pass': () => void;
   'room:vote-dissolve': () => void;
   'room:vote-dissolve-reply': (agree: boolean) => void;
+  'room:new-game': () => void;
 }
 
 /** 房间状态同步数据 */
@@ -80,4 +81,5 @@ export interface ServerEvents {
   'room:vote-dissolve-request': (initiator: string) => void;
   'room:vote-dissolve-rejected': () => void;
   'room:dissolved': (scoreHistory?: Array<{ round: number; result: string; scores: Array<{ seat: string; delta: number }> }>) => void;
+  'room:new-game-created': (roomId: string) => void;
 }

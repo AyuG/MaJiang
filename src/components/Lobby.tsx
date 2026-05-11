@@ -18,6 +18,7 @@ interface LobbyProps {
   onDissolve: () => void;
   onStart: () => void;
   onLeaveRoom: () => void;
+  onShowScores?: () => void;
 }
 
 const SEAT_LABELS: Record<string, string> = {
@@ -27,7 +28,7 @@ const SEAT_LABELS: Record<string, string> = {
 export function Lobby({
   isConnected, roomId, roomSync, myId, myNickname, roomError,
   onCreateRoom, onJoinRoom, onReady, onUnready, onKick, onDissolve, onStart, onLeaveRoom,
-  onChangeNickname,
+  onChangeNickname, onShowScores,
 }: LobbyProps & { onChangeNickname?: (name: string) => void }) {
   const [inputRoomId, setInputRoomId] = useState('');
   const [copied, setCopied] = useState(false);
@@ -81,7 +82,10 @@ export function Lobby({
 
       {!roomId ? (
         <div className="lobby-actions">
-          <button className="lobby-btn" onClick={onCreateRoom} disabled={!isConnected}>创建房间</button>
+          <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
+            <button className="lobby-btn" onClick={onCreateRoom} disabled={!isConnected}>创建房间</button>
+            <button className="lobby-btn" onClick={onShowScores} style={{ background: '#1a3a4a', borderColor: '#2d5a6e' }}>积分记录</button>
+          </div>
           <div className="join-section">
             <input type="text" placeholder="4位房间号" value={inputRoomId}
               onChange={handleInputChange} className="room-input" maxLength={4} />

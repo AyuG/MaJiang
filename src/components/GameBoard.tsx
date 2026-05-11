@@ -15,10 +15,12 @@ interface Props {
   roomId?: string;
   onTileClick: (tileId: number) => void;
   onVoteDissolve: () => void;
+  onShowScores?: () => void;
+  onNewGame?: () => void;
   children?: React.ReactNode;
 }
 
-export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDissolve, children }: Props) {
+export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDissolve, onShowScores, onNewGame, children }: Props) {
   const myIdx = gameState.players.findIndex((p) => p.id === myPlayerId);
   const [selfI, rightI, topI, leftI] = [0, 1, 2, 3].map((o) => (myIdx + o) % 4);
   const cur = gameState.currentPlayerIndex;
@@ -96,7 +98,9 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
         <span className={selfI === cur ? 'hd-my' : ''}>
           ▶ {cur === myIdx ? '你' : SEATS[cur]}出牌
         </span>
+        <button className="hd-btn" onClick={onShowScores}>积分记录</button>
         <button className="hd-btn" onClick={onVoteDissolve}>解散</button>
+        <button className="hd-btn" onClick={onNewGame}>新房</button>
       </header>
 
       {/* ── Table ── */}

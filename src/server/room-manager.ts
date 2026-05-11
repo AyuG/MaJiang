@@ -69,6 +69,21 @@ export class RoomManager {
     return roomId;
   }
 
+  /** Create a room with pre-assigned players (used by "新房" feature) */
+  createRoomWithPlayers(players: Array<{ id: string; seat: SeatPosition }>): string {
+    const roomId = generateRoomId(this.rooms);
+    const room: RoomState = {
+      roomId,
+      players: players.map((p) => ({ id: p.id, seat: p.seat, isReady: false, isConnected: true })),
+      ownerId: players[0]?.id ?? '',
+      status: 'waiting',
+      dealerIndex: 0,
+      createdAt: Date.now(),
+    };
+    this.rooms.set(roomId, room);
+    return roomId;
+  }
+
   joinRoom(roomId: string, playerId: string): void {
     const room = this.rooms.get(roomId);
     if (!room) throw new Error(`Room ${roomId} not found`);

@@ -1,14 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { useMahjongSocket } from '@/hooks/useMahjongSocket';
 import { GameBoard } from '@/components/GameBoard';
 import { ActionBar } from '@/components/ActionBar';
 import { PauseOverlay } from '@/components/PauseOverlay';
+import { ScorePanel } from '@/components/ScorePanel';
 
-/**
- * 游戏大厅页面 — 未来将扩展为显示房间列表、快速匹配等功能。
- * 当前作为独立游戏视图，通过 Socket 接收游戏状态。
- */
 export default function GamePage() {
   const {
     playerId,
@@ -16,14 +14,17 @@ export default function GamePage() {
     availableActions,
     gangOptions,
     remainingSeconds,
+    scoreLog,
     discard,
     peng,
     gang,
     hu,
     pass,
     voteDissolve,
+    newGame,
   } = useMahjongSocket();
 
+  const [showScores, setShowScores] = useState(false);
   const myPlayerId = playerId;
 
   if (!gameState) {
@@ -42,8 +43,11 @@ export default function GamePage() {
       <GameBoard
         gameState={gameState}
         myPlayerId={myPlayerId}
+        roomId={gameState.roomId}
         onTileClick={discard}
         onVoteDissolve={voteDissolve}
+        onShowScores={() => setShowScores(true)}
+        onNewGame={newGame}
       >
         <ActionBar
           availableActions={availableActions}
@@ -56,6 +60,13 @@ export default function GamePage() {
         />
       </GameBoard>
       {gameState.isPaused && <PauseOverlay gameState={gameState} />}
+      {showScores && (
+        <ScorePanel
+          scoreLog={scoreLog}
+          modal
+          onClose={() => setShowScores(false)}
+        />
+      )}
     </main>
   );
 }

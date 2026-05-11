@@ -451,6 +451,55 @@ export function setupSocketHandlers(
       }
     });
 
+    // ── New game: copy players to new room, keep seats ─
+    socket.on('room:new-game', async () => {
+      const mapping = socketMap.get(socket.id);
+      if (!mapping) return;
+      const oldRoomId = mapping.roomId;
+      const room = roomManager.getRoom(oldRoomId);
+      if (!room) return;
+      if (room.players.length < 2) return;
+
+      // Build player list preserving seats
+      const playersToCopy = room.players.map((p) => ({ id: p.id, seat: p.seat }));
+
+      // Create new room with same players
+      const newRoomId = roomManager.createRoomWithPlayers(playersToCopy);
+
+      // Set all players ready in new room
+      for (const p of playersToCopy) {
+        try { roomManager.setReady(newRoomId, p.id); } catch { /* ignore */ }
+      }
+
+      // Dissolve old room
+      await dissolveWithScores(oldRoomId);
+
+      // Move all sockets to new room
+      const newRoomSockets: Array<{ sid: string; pid: string }> = [];
+      for (const [sid, m] of socketMap.entries()) {
+        if (m.roomId === oldRoomId) {
+          // Don't move yet — oldRoomId still active, need to update mapping
+          newRoomSockets.push({ sid, pid: m.playerId });
+        }
+      }
+
+      // Update socket mappings and join new room
+      for (const { sid, pid } of newRoomSockets) {
+        socketMap.set(sid, { roomId: newRoomId, playerId: pid });
+        const s = io.sockets.sockets.get(sid);
+        if (s) {
+          s.leave(oldRoomId);
+          s.join(newRoomId);
+        }
+      }
+
+      // Broadcast sync to all in new room
+      broadcastRoomSync(newRoomId);
+
+      // Notify initiator (room:new-game-created) and broadcast sync
+      io.to(newRoomId).emit('room:new-game-created', newRoomId);
+    });
+
     // ── Game actions ─────────────────────────────────
     socket.on('game:discard', async (tileId: number) => {
       const mapping = socketMap.get(socket.id);
