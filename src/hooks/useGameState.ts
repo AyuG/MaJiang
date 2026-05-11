@@ -43,10 +43,8 @@ function saveScoreHistory(log: ScoreLogEntry[]) {
 }
 
 export function clearFinishedScores(): ScoreLogEntry[] {
-  const all = loadScoreHistory();
-  const active = all.filter((e) => e.status !== 'finished');
-  saveScoreHistory(active);
-  return active;
+  saveScoreHistory([]);
+  return [];
 }
 
 export interface GameStateHook {

@@ -83,7 +83,7 @@ export function ScorePanel({ scoreLog, nicknames, modal, onClose, onClear }: Sco
             <span className="score-modal-title">积分记录</span>
             <div style={{ display: 'flex', gap: '.4rem' }}>
               {onClear && (
-                <button className="hd-btn" onClick={onClear} style={{ background: '#4a2a2a', borderColor: '#6e3a3a', color: '#feb2b2' }}>清理旧数据</button>
+                <button className="hd-btn" onClick={onClear} style={{ background: '#4a2a2a', borderColor: '#6e3a3a', color: '#feb2b2' }}>清除数据</button>
               )}
               <button className="hd-btn" onClick={onClose}>关闭</button>
             </div>
