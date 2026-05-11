@@ -6,8 +6,18 @@ import { Tile } from './Tile';
 import { MeldDisplay } from './MeldDisplay';
 import { Compass } from './Compass';
 import { audioService } from '@/services/audioService';
+import type { Tile as TileType } from '@/types';
 
 const SEATS = ['东', '南', '西', '北'];
+
+/** Create dummy tiles for face-down display */
+function dummyTiles(count: number): TileType[] {
+  return Array.from({ length: count }, (_, i) => ({
+    suit: 'wan' as TileType['suit'],
+    value: 1,
+    id: -1 - i,
+  }));
+}
 
 interface Props {
   gameState: ClientGameState;
@@ -84,6 +94,20 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
     </div>
   );
 
+  /** Other player's face-down hand */
+  const OtherHand = ({ i, side }: { i: number; side: 'top' | 'left' | 'right' }) => {
+    const count = gameState.players[i].handCount;
+    if (count <= 0) return null;
+    const tiles = dummyTiles(count);
+    return (
+      <div className={`hand-other hand-other-${side}`}>
+        {tiles.map((t, idx) => (
+          <Tile key={t.id + idx} tile={t} size="sm" isFaceDown />
+        ))}
+      </div>
+    );
+  };
+
   const sorted = [...gameState.myHand].sort((a, b) => {
     const o: Record<string, number> = { wan: 0, tiao: 1, tong: 2, feng: 3, zi: 4 };
     return (o[a.suit] ?? 9) - (o[b.suit] ?? 9) || a.value - b.value;
@@ -106,9 +130,18 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
       {/* ── Table ── */}
       <div className="G-table">
         {/* ── Layer 1: Player labels (outermost edges) ── */}
-        <div className="G-top"><PLabel i={topI} /></div>
-        <div className="G-left"><PLabel i={leftI} /></div>
-        <div className="G-right"><PLabel i={rightI} /></div>
+        <div className="G-top">
+          <PLabel i={topI} />
+          <OtherHand i={topI} side="top" />
+        </div>
+        <div className="G-left">
+          <PLabel i={leftI} />
+          <OtherHand i={leftI} side="left" />
+        </div>
+        <div className="G-right">
+          <PLabel i={rightI} />
+          <OtherHand i={rightI} side="right" />
+        </div>
 
         {/* ── Center area with 3 concentric layers: meld(outer) → river(mid) → compass(center) ── */}
         <div className="G-center">
