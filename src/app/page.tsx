@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useMahjongSocket } from '@/hooks/useMahjongSocket';
+import { clearFinishedScores } from '@/hooks/useGameState';
+import type { ScoreLogEntry } from '@/hooks/useGameState';
 import { GameBoard } from '@/components/GameBoard';
 import { ActionBar } from '@/components/ActionBar';
 import { Lobby } from '@/components/Lobby';
@@ -156,12 +158,20 @@ export default function Home() {
   }
 
   // Score modal (shared across views)
+  const [displayScoreLog, setDisplayScoreLog] = useState<ScoreLogEntry[] | null>(null);
+
+  const handleClearScores = useCallback(() => {
+    const remaining = clearFinishedScores();
+    setDisplayScoreLog(remaining);
+  }, []);
+
   const scoreModal = showScores ? (
     <ScorePanel
-      scoreLog={scoreLog}
+      scoreLog={displayScoreLog ?? scoreLog}
       nicknames={nicknames}
       modal
-      onClose={() => setShowScores(false)}
+      onClose={() => { setShowScores(false); setDisplayScoreLog(null); }}
+      onClear={handleClearScores}
     />
   ) : null;
 

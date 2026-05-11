@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useMahjongSocket } from '@/hooks/useMahjongSocket';
+import { clearFinishedScores } from '@/hooks/useGameState';
+import type { ScoreLogEntry } from '@/hooks/useGameState';
 import { GameBoard } from '@/components/GameBoard';
 import { ActionBar } from '@/components/ActionBar';
 import { PauseOverlay } from '@/components/PauseOverlay';
@@ -33,8 +35,14 @@ export default function GamePage() {
   } = useMahjongSocket();
 
   const [showScores, setShowScores] = useState(false);
+  const [displayScoreLog, setDisplayScoreLog] = useState<ScoreLogEntry[] | null>(null);
   const myPlayerId = playerId;
   const nicknames = loadNicknames();
+
+  const handleClearScores = useCallback(() => {
+    const remaining = clearFinishedScores();
+    setDisplayScoreLog(remaining);
+  }, []);
 
   if (!gameState) {
     return (
@@ -71,10 +79,11 @@ export default function GamePage() {
       {gameState.isPaused && <PauseOverlay gameState={gameState} />}
       {showScores && (
         <ScorePanel
-          scoreLog={scoreLog}
+          scoreLog={displayScoreLog ?? scoreLog}
           nicknames={nicknames}
           modal
-          onClose={() => setShowScores(false)}
+          onClose={() => { setShowScores(false); setDisplayScoreLog(null); }}
+          onClear={handleClearScores}
         />
       )}
     </main>

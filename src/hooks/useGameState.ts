@@ -42,6 +42,13 @@ function saveScoreHistory(log: ScoreLogEntry[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); } catch { /* quota exceeded, ignore */ }
 }
 
+export function clearFinishedScores(): ScoreLogEntry[] {
+  const all = loadScoreHistory();
+  const active = all.filter((e) => e.status !== 'finished');
+  saveScoreHistory(active);
+  return active;
+}
+
 export interface GameStateHook {
   gameState: ClientGameState | null;
   roomId: string | null;

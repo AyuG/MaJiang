@@ -9,11 +9,12 @@ interface ScorePanelProps {
   /** If true, renders as a modal overlay. Otherwise renders as floating button. */
   modal?: boolean;
   onClose?: () => void;
+  onClear?: () => void;
 }
 
 const SEATS = ['东', '南', '西', '北'];
 
-export function ScorePanel({ scoreLog, nicknames, modal, onClose }: ScorePanelProps) {
+export function ScorePanel({ scoreLog, nicknames, modal, onClose, onClear }: ScorePanelProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   if (scoreLog.length === 0 && !modal) return null;
@@ -80,7 +81,12 @@ export function ScorePanel({ scoreLog, nicknames, modal, onClose }: ScorePanelPr
         <div className="score-modal-content" onClick={(e) => e.stopPropagation()}>
           <div className="score-modal-header">
             <span className="score-modal-title">积分记录</span>
-            <button className="hd-btn" onClick={onClose}>关闭</button>
+            <div style={{ display: 'flex', gap: '.4rem' }}>
+              {onClear && (
+                <button className="hd-btn" onClick={onClear} style={{ background: '#4a2a2a', borderColor: '#6e3a3a', color: '#feb2b2' }}>清理旧数据</button>
+              )}
+              <button className="hd-btn" onClick={onClose}>关闭</button>
+            </div>
           </div>
           {content}
         </div>
