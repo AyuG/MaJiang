@@ -57,7 +57,7 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
     );
   };
 
-  /** River (discard pool) - innermost layer */
+  /** River (discard pool) - middle layer, between meld and compass */
   const River = ({ i }: { i: number }) => {
     const tiles = gameState.players[i].discardPool;
     return (
@@ -70,7 +70,7 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
     );
   };
 
-  /** Meld zone - middle layer */
+  /** Meld zone - outermost ring, pushed to edges */
   const MeldZone = ({ i, position }: { i: number; position: 'self' | 'right' | 'top' | 'left' }) => (
     <div className="meld-zone">
       <MeldDisplay 
@@ -106,9 +106,9 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
         <div className="G-left"><PLabel i={leftI} /></div>
         <div className="G-right"><PLabel i={rightI} /></div>
 
-        {/* ── Center area with 3 concentric layers ── */}
+        {/* ── Center area with 3 concentric layers: meld(outer) → river(mid) → compass(center) ── */}
         <div className="G-center">
-          {/* ── Layer 2: Meld zone (middle layer) ── */}
+          {/* ── Outer ring: Meld zone (pushed to edges) ── */}
           <div className="G-meld-layer">
             <div className="G-meld-top"><MeldZone i={topI} position="top" /></div>
             <div className="G-meld-left"><MeldZone i={leftI} position="left" /></div>
@@ -116,7 +116,7 @@ export function GameBoard({ gameState, myPlayerId, roomId, onTileClick, onVoteDi
             <div className="G-meld-self"><MeldZone i={selfI} position="self" /></div>
           </div>
 
-          {/* ── Layer 3: River zone (inner layer) ── */}
+          {/* ── Middle ring: River zone (discards, between meld and compass) ── */}
           <div className="G-river-layer">
             <div className="G-river-top"><River i={topI} /></div>
             <div className="G-river-left"><River i={leftI} /></div>

@@ -81,10 +81,10 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
   pointer-events:none;
 }
 .G-meld-layer > div{pointer-events:auto}
-.G-meld-top{grid-area:top;display:flex;justify-content:center;align-items:flex-end;padding-bottom:.75rem}
-.G-meld-left{grid-area:left;display:flex;justify-content:flex-end;align-items:center;padding-right:.5rem}
-.G-meld-right{grid-area:right;display:flex;justify-content:flex-start;align-items:center;padding-left:.5rem}
-.G-meld-self{grid-area:self;display:flex;justify-content:center;align-items:flex-start;padding-top:.75rem}
+.G-meld-top{grid-area:top;display:flex;justify-content:center;align-items:flex-end;align-self:start}
+.G-meld-left{grid-area:left;display:flex;justify-content:flex-end;align-items:center;justify-self:start}
+.G-meld-right{grid-area:right;display:flex;justify-content:flex-start;align-items:center;justify-self:end}
+.G-meld-self{grid-area:self;display:flex;justify-content:center;align-items:flex-start;align-self:end}
 
 /* Layer 3: River zone — inner ring (centered in grid cells, no extreme push) */
 .G-river-layer{
