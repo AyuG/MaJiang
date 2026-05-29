@@ -200,6 +200,8 @@ export function setupSocketHandlers(
           isReady: p.isReady,
           isConnected: p.isConnected,
           nickname: nicknameMap.get(p.id),
+          role: p.role,
+          permissions: roomManager.getPermissions(p.role),
         })),
       };
       io.to(roomId).emit('room:sync', syncData);
@@ -318,8 +320,7 @@ export function setupSocketHandlers(
         }
 
         const oldPlayerId = disconnectedPlayer.id;
-        disconnectedPlayer.id = playerId;
-        disconnectedPlayer.isConnected = true;
+        roomManager.replacePlayer(roomId, disconnectedPlayer.id, playerId);
 
         socketMap.set(socket.id, { roomId, playerId });
         socket.join(roomId);
@@ -354,9 +355,11 @@ export function setupSocketHandlers(
         if (room.players.length >= 4) {
           const disconnectedPlayer = room.players.find((p) => !p.isConnected);
           if (disconnectedPlayer) {
-            disconnectedPlayer.id = playerId;
-            disconnectedPlayer.isConnected = true;
-            disconnectedPlayer.isReady = true;
+            roomManager.replacePlayer(roomId, disconnectedPlayer.id, playerId);
+            const replacedPlayer = room.players.find((p) => p.id === playerId);
+            if (replacedPlayer) {
+              replacedPlayer.isReady = true;
+            }
             socketMap.set(socket.id, { roomId, playerId });
             socket.join(roomId);
             broadcastRoomSync(roomId);
@@ -411,7 +414,7 @@ export function setupSocketHandlers(
       try {
         const room = roomManager.getRoom(roomId);
         if (!room) return;
-        if (room.ownerId !== playerId) return; // only owner
+        if (!roomManager.canStartGame(roomId, playerId)) return;
         if (room.players.length !== 4) return;
         if (!room.players.every((p) => p.isReady)) return;
 
@@ -471,6 +474,23 @@ export function setupSocketHandlers(
         broadcastRoomSync(roomId);
       } catch (err) {
         logger.warn('room:kick', 'Kick failed (not owner or target not found)', err);
+      }
+    });
+
+    // ── Room: role management (owner only) ───────────
+    socket.on('room:set-role', (targetId: string, role: 'admin' | 'member') => {
+      const mapping = socketMap.get(socket.id);
+      if (!mapping) return;
+      const { roomId, playerId } = mapping;
+      try {
+        if (role !== 'admin' && role !== 'member') {
+          throw new Error('Invalid role');
+        }
+        roomManager.setPlayerRole(roomId, playerId, targetId, role);
+        broadcastRoomSync(roomId);
+      } catch (err) {
+        logger.warn('room:set-role', 'Role update failed', err);
+        socket.emit('room:error', '权限不足，无法修改玩家角色');
       }
     });
 

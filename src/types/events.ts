@@ -1,5 +1,8 @@
 import type { GameState, PlayerState } from './game';
 
+export type RoomRole = 'owner' | 'admin' | 'member';
+export type RoomPermission = 'start_game' | 'kick_player' | 'manage_roles' | 'dissolve_room';
+
 /** Socket handshake auth data */
 export interface SocketAuth {
   playerId?: string;
@@ -38,6 +41,7 @@ export interface ClientEvents {
   'room:ready': () => void;
   'room:unready': () => void;
   'room:kick': (targetId: string) => void;
+  'room:set-role': (targetId: string, role: Exclude<RoomRole, 'owner'>) => void;
   'room:dissolve': () => void;
   'room:start': () => void;
   'room:change-nickname': (name: string) => void;
@@ -55,7 +59,15 @@ export interface ClientEvents {
 export interface RoomSyncData {
   roomId: string;
   ownerId: string;
-  players: Array<{ id: string; seat: string; isReady: boolean; isConnected: boolean; nickname?: string }>;
+  players: Array<{
+    id: string;
+    seat: string;
+    isReady: boolean;
+    isConnected: boolean;
+    nickname?: string;
+    role: RoomRole;
+    permissions: RoomPermission[];
+  }>;
 }
 
 /** 掷骰子结果 */

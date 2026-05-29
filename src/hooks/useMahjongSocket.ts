@@ -44,6 +44,13 @@ export function useMahjongSocket() {
     [socket],
   );
 
+  const setPlayerRole = useCallback(
+    (targetId: string, role: 'admin' | 'member') => {
+      socket?.emit('room:set-role', targetId, role);
+    },
+    [socket],
+  );
+
   const dissolveRoom = useCallback(() => {
     socket?.emit('room:dissolve');
   }, [socket]);
@@ -119,6 +126,7 @@ export function useMahjongSocket() {
     setReady,
     setUnready,
     kickPlayer,
+    setPlayerRole,
     dissolveRoom,
     startGame,
     discard,

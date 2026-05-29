@@ -296,3 +296,46 @@ describe('Property 22: 房间满员拒绝', () => {
     );
   });
 });
+
+describe('Room permissions', () => {
+  it('should allow owner to grant and revoke admin role', () => {
+    const mgr = new RoomManager();
+    const roomId = mgr.createRoom('owner');
+    mgr.joinRoom(roomId, 'member');
+
+    mgr.setPlayerRole(roomId, 'owner', 'member', 'admin');
+    expect(mgr.getRoom(roomId)?.players.find((p) => p.id === 'member')?.role).toBe('admin');
+    expect(mgr.canStartGame(roomId, 'member')).toBe(true);
+
+    mgr.setPlayerRole(roomId, 'owner', 'member', 'member');
+    expect(mgr.getRoom(roomId)?.players.find((p) => p.id === 'member')?.role).toBe('member');
+    expect(mgr.canStartGame(roomId, 'member')).toBe(false);
+  });
+
+  it('should let admins kick members but not owners or other admins', () => {
+    const mgr = new RoomManager();
+    const roomId = mgr.createRoom('owner');
+    mgr.joinRoom(roomId, 'admin');
+    mgr.joinRoom(roomId, 'member');
+    mgr.joinRoom(roomId, 'other-admin');
+
+    mgr.setPlayerRole(roomId, 'owner', 'admin', 'admin');
+    mgr.setPlayerRole(roomId, 'owner', 'other-admin', 'admin');
+
+    expect(() => mgr.kickPlayer(roomId, 'admin', 'owner')).toThrow('No permission');
+    expect(() => mgr.kickPlayer(roomId, 'admin', 'other-admin')).toThrow('No permission');
+
+    mgr.kickPlayer(roomId, 'admin', 'member');
+    expect(mgr.getRoom(roomId)?.players.some((p) => p.id === 'member')).toBe(false);
+  });
+
+  it('should reject role changes from non-owners', () => {
+    const mgr = new RoomManager();
+    const roomId = mgr.createRoom('owner');
+    mgr.joinRoom(roomId, 'admin');
+    mgr.joinRoom(roomId, 'member');
+    mgr.setPlayerRole(roomId, 'owner', 'admin', 'admin');
+
+    expect(() => mgr.setPlayerRole(roomId, 'admin', 'member', 'admin')).toThrow('Only the room owner');
+  });
+});

@@ -15,6 +15,7 @@ interface LobbyProps {
   onReady: () => void;
   onUnready: () => void;
   onKick: (targetId: string) => void;
+  onSetRole: (targetId: string, role: 'admin' | 'member') => void;
   onDissolve: () => void;
   onStart: () => void;
   onLeaveRoom: () => void;
@@ -27,7 +28,7 @@ const SEAT_LABELS: Record<string, string> = {
 
 export function Lobby({
   isConnected, roomId, roomSync, myId, myNickname, roomError,
-  onCreateRoom, onJoinRoom, onReady, onUnready, onKick, onDissolve, onStart, onLeaveRoom,
+  onCreateRoom, onJoinRoom, onReady, onUnready, onKick, onSetRole, onDissolve, onStart, onLeaveRoom,
   onChangeNickname, onShowScores,
 }: LobbyProps & { onChangeNickname?: (name: string) => void }) {
   const [inputRoomId, setInputRoomId] = useState('');
@@ -49,6 +50,22 @@ export function Lobby({
   const myPlayer = roomSync?.players.find((p) => p.id === myId);
   const iAmReady = myPlayer?.isReady ?? false;
   const allReady = (roomSync?.players.length === 4) && roomSync.players.every((p) => p.isReady);
+  const myPermissions = myPlayer?.permissions ?? [];
+  const canStartGame = myPermissions.includes('start_game');
+  const canManageRoles = myPermissions.includes('manage_roles');
+
+  const canKickPlayer = (target: NonNullable<RoomSyncData['players'][number]>) => {
+    if (!myPlayer || myPlayer.id === target.id) return false;
+    if (!myPermissions.includes('kick_player')) return false;
+    if (myPlayer.role === 'owner') return target.role !== 'owner';
+    return myPlayer.role === 'admin' && target.role === 'member';
+  };
+
+  const roleLabel = (role: string) => {
+    if (role === 'owner') return '房主';
+    if (role === 'admin') return '管理员';
+    return '成员';
+  };
 
   return (
     <div className="lobby">
@@ -126,7 +143,6 @@ export function Lobby({
             {[0, 1, 2, 3].map((i) => {
               const p = roomSync?.players[i];
               const isMe = p?.id === myId;
-              const isPlayerOwner = p?.id === roomSync?.ownerId;
               const seatKey = p?.seat ?? ['east','south','west','north'][i];
               const displayName = isMe ? '你' : (p?.nickname || p?.id?.slice(0, 8) || '未知');
               return (
@@ -135,11 +151,19 @@ export function Lobby({
                   {p ? (
                     <>
                       {displayName}
-                      {isPlayerOwner && ' 👑'}
+                      <span className={`role-badge role-${p.role}`}>{roleLabel(p.role)}</span>
                       {!p.isConnected && ' 🔴断线'}
                       {p.isConnected && p.isReady && ' ✅已准备'}
                       {p.isConnected && !p.isReady && ' ⏳等待中'}
-                      {isOwner && !isMe && p.isConnected && (
+                      {canManageRoles && !isMe && p.role !== 'owner' && p.isConnected && (
+                        <button
+                          className="role-btn"
+                          onClick={() => onSetRole(p.id, p.role === 'admin' ? 'member' : 'admin')}
+                        >
+                          {p.role === 'admin' ? '取消管理' : '设管理'}
+                        </button>
+                      )}
+                      {canKickPlayer(p) && p.isConnected && (
                         <button className="kick-btn" onClick={() => onKick(p.id)}>踢出</button>
                       )}
                     </>
@@ -157,7 +181,7 @@ export function Lobby({
             ) : (
               <button className="lobby-btn unready-btn" onClick={onUnready}>取消准备</button>
             )}
-            {isOwner && allReady && (
+            {canStartGame && allReady && (
               <button className="lobby-btn start-btn" onClick={onStart}>开始游戏</button>
             )}
             <button className="lobby-btn" onClick={onLeaveRoom}>退出房间</button>

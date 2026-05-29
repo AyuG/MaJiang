@@ -20,6 +20,10 @@ body{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;backg
 .player-slot-self{color:#e8b339}
 .empty-slot{color:#4a5568}
 .waiting-hint{color:#718096;font-size:.85rem}
+.role-badge{display:inline-flex;align-items:center;margin-left:.25rem;padding:.05rem .25rem;font-size:.7rem;border:1px solid #374151;border-radius:3px;color:#cbd5e1;background:#111827}
+.role-owner{border-color:#e8b339;color:#e8b339}
+.role-admin{border-color:#63b3ed;color:#63b3ed}
+.role-btn{margin-left:.3rem;padding:.08rem .3rem;font-size:.75rem;background:#1a3a4a;color:#bee3f8;border:1px solid #2d5a6e;cursor:pointer;border-radius:2px}
 .kick-btn{margin-left:.3rem;padding:.08rem .3rem;font-size:.75rem;background:#742a2a;color:#feb2b2;border:1px solid #c53030;cursor:pointer;border-radius:2px}
 .lobby-btn-group{display:flex;gap:.4rem;margin-top:.3rem;flex-wrap:wrap;justify-content:center}
 .unready-btn{background:#4a5568}

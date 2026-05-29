@@ -5,6 +5,8 @@
  * selection, dealer inheritance, and vote-dissolve logic.
  */
 
+import type { RoomPermission, RoomRole } from '@/types';
+
 export type SeatPosition = 'east' | 'south' | 'west' | 'north';
 
 export interface RoomPlayer {
@@ -12,6 +14,7 @@ export interface RoomPlayer {
   seat: SeatPosition;
   isReady: boolean;
   isConnected: boolean;
+  role: RoomRole;
 }
 
 export interface RoomState {
@@ -41,6 +44,11 @@ export interface VoteResult {
 
 const SEAT_ORDER: SeatPosition[] = ['east', 'south', 'west', 'north'];
 const VOTE_TIMEOUT_MS = 30_000;
+const ROLE_PERMISSIONS: Record<RoomRole, RoomPermission[]> = {
+  owner: ['start_game', 'kick_player', 'manage_roles', 'dissolve_room'],
+  admin: ['start_game', 'kick_player'],
+  member: [],
+};
 
 export class RoomManager {
   private rooms = new Map<string, RoomState>();
@@ -59,7 +67,7 @@ export class RoomManager {
     const roomId = generateRoomId(this.rooms);
     const room: RoomState = {
       roomId,
-      players: [{ id: playerId, seat: 'east', isReady: false, isConnected: true }],
+      players: [{ id: playerId, seat: 'east', isReady: false, isConnected: true, role: 'owner' }],
       ownerId: playerId,
       status: 'waiting',
       dealerIndex: 0,
@@ -74,7 +82,13 @@ export class RoomManager {
     const roomId = generateRoomId(this.rooms);
     const room: RoomState = {
       roomId,
-      players: players.map((p) => ({ id: p.id, seat: p.seat, isReady: false, isConnected: true })),
+      players: players.map((p, index) => ({
+        id: p.id,
+        seat: p.seat,
+        isReady: false,
+        isConnected: true,
+        role: index === 0 ? 'owner' : 'member',
+      })),
       ownerId: players[0]?.id ?? '',
       status: 'waiting',
       dealerIndex: 0,
@@ -92,7 +106,7 @@ export class RoomManager {
       throw new Error('Player already in room');
     }
     const seat = SEAT_ORDER[room.players.length];
-    room.players.push({ id: playerId, seat, isReady: false, isConnected: true });
+    room.players.push({ id: playerId, seat, isReady: false, isConnected: true, role: 'member' });
   }
 
   leaveRoom(roomId: string, playerId: string): void {
@@ -101,6 +115,8 @@ export class RoomManager {
     room.players = room.players.filter((p) => p.id !== playerId);
     if (room.players.length === 0) {
       this.rooms.delete(roomId);
+    } else if (room.ownerId === playerId) {
+      this.transferOwnership(room);
     }
   }
 
@@ -126,12 +142,11 @@ export class RoomManager {
     player.isReady = false;
   }
 
-  /** Owner kicks a player from the room (only owner can do this) */
-  kickPlayer(roomId: string, ownerId: string, targetId: string): void {
+  /** Kick a player from the room. Owner can kick anyone except self; admins can kick members. */
+  kickPlayer(roomId: string, requesterId: string, targetId: string): void {
     const room = this.rooms.get(roomId);
     if (!room) throw new Error(`Room ${roomId} not found`);
-    if (room.ownerId !== ownerId) throw new Error('Only the room owner can kick players');
-    if (ownerId === targetId) throw new Error('Cannot kick yourself');
+    if (!this.canKick(room, requesterId, targetId)) throw new Error('No permission to kick this player');
     room.players = room.players.filter((p) => p.id !== targetId);
   }
 
@@ -142,6 +157,34 @@ export class RoomManager {
     if (room.ownerId !== ownerId) throw new Error('Only the room owner can dissolve the room');
     this.rooms.delete(roomId);
     this.voteStates.delete(roomId);
+  }
+
+  setPlayerRole(roomId: string, requesterId: string, targetId: string, role: Exclude<RoomRole, 'owner'>): void {
+    const room = this.rooms.get(roomId);
+    if (!room) throw new Error(`Room ${roomId} not found`);
+    if (!this.hasPermission(roomId, requesterId, 'manage_roles')) {
+      throw new Error('Only the room owner can manage roles');
+    }
+    if (targetId === room.ownerId) throw new Error('Cannot change owner role');
+    const target = room.players.find((p) => p.id === targetId);
+    if (!target) throw new Error('Player not in room');
+    target.role = role;
+  }
+
+  canStartGame(roomId: string, playerId: string): boolean {
+    return this.hasPermission(roomId, playerId, 'start_game');
+  }
+
+  hasPermission(roomId: string, playerId: string, permission: RoomPermission): boolean {
+    const room = this.rooms.get(roomId);
+    if (!room) return false;
+    const player = room.players.find((p) => p.id === playerId);
+    if (!player) return false;
+    return ROLE_PERMISSIONS[player.role].includes(permission);
+  }
+
+  getPermissions(role: RoomRole): RoomPermission[] {
+    return [...ROLE_PERMISSIONS[role]];
   }
 
   /** Mark a player as disconnected in the lobby (before game starts) */
@@ -174,7 +217,23 @@ export class RoomManager {
       this.rooms.delete(roomId);
     } else if (room.ownerId === playerId) {
       // Transfer ownership to next player
-      room.ownerId = room.players[0].id;
+      this.transferOwnership(room);
+    }
+  }
+
+  replacePlayer(roomId: string, oldPlayerId: string, newPlayerId: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room) throw new Error(`Room ${roomId} not found`);
+    if (room.players.some((p) => p.id === newPlayerId)) {
+      throw new Error('Player already in room');
+    }
+    const player = room.players.find((p) => p.id === oldPlayerId);
+    if (!player) throw new Error('Player not in room');
+    player.id = newPlayerId;
+    player.isConnected = true;
+    if (room.ownerId === oldPlayerId) {
+      room.ownerId = newPlayerId;
+      player.role = 'owner';
     }
   }
 
@@ -407,6 +466,7 @@ export class RoomManager {
         seat: SEAT_ORDER[i],
         isReady: p.isReady,
         isConnected: p.isConnected,
+        role: i === 0 ? 'owner' : 'member',
       })),
       ownerId: data.players[0]?.id ?? '',
       status: data.status,
@@ -414,6 +474,26 @@ export class RoomManager {
       createdAt: Date.now(),
     };
     this.rooms.set(roomId, room);
+  }
+
+  private canKick(room: RoomState, requesterId: string, targetId: string): boolean {
+    if (requesterId === targetId) return false;
+    const requester = room.players.find((p) => p.id === requesterId);
+    const target = room.players.find((p) => p.id === targetId);
+    if (!requester || !target) return false;
+    if (!ROLE_PERMISSIONS[requester.role].includes('kick_player')) return false;
+    if (requester.role === 'owner') return target.role !== 'owner';
+    return requester.role === 'admin' && target.role === 'member';
+  }
+
+  private transferOwnership(room: RoomState): void {
+    const nextOwner = room.players[0];
+    if (!nextOwner) return;
+    room.ownerId = nextOwner.id;
+    room.players = room.players.map((p) => ({
+      ...p,
+      role: p.id === nextOwner.id ? 'owner' : p.role === 'owner' ? 'member' : p.role,
+    }));
   }
 }
 

@@ -44,6 +44,7 @@ export default function Home() {
     setReady,
     setUnready,
     kickPlayer,
+    setPlayerRole,
     dissolveRoom,
     startGame,
     discard,
@@ -280,6 +281,7 @@ export default function Home() {
         onReady={setReady}
         onUnready={setUnready}
         onKick={kickPlayer}
+        onSetRole={setPlayerRole}
         onDissolve={dissolveRoom}
         onStart={startGame}
         onLeaveRoom={handleLeaveRoom}
