@@ -31,7 +31,22 @@ function buildManualState(roomId: string): GameState {
     players: [
       {
         id: 'p1',
-        hand: [makeTile(TileSuit.WAN, 1, 1), makeTile(TileSuit.TIAO, 9, 50)],
+        hand: [
+          makeTile(TileSuit.WAN, 1, 1),
+          makeTile(TileSuit.TIAO, 1, 10),
+          makeTile(TileSuit.TIAO, 2, 11),
+          makeTile(TileSuit.TIAO, 3, 12),
+          makeTile(TileSuit.TIAO, 4, 13),
+          makeTile(TileSuit.TIAO, 5, 14),
+          makeTile(TileSuit.TIAO, 6, 15),
+          makeTile(TileSuit.TIAO, 7, 16),
+          makeTile(TileSuit.TIAO, 8, 17),
+          makeTile(TileSuit.TIAO, 9, 18),
+          makeTile(TileSuit.TONG, 1, 19),
+          makeTile(TileSuit.TONG, 2, 20),
+          makeTile(TileSuit.TONG, 3, 21),
+          makeTile(TileSuit.FENG, 1, 22),
+        ],
         melds: [],
         discardPool: [],
         score: 0,
