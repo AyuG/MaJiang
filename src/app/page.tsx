@@ -59,18 +59,18 @@ export default function Home() {
     newGame,
   } = useMahjongSocket();
 
-  const handleLeaveRoom = useCallback(() => {
-    setLocalRoomId(null);
-    setRoomSync(null);
-    leaveRoom();
-  }, [leaveRoom]);
-
   const [localRoomId, setLocalRoomId] = useState<string | null>(null);
   const [roomSync, setRoomSync] = useState<RoomSyncData | null>(null);
   const [voteInitiator, setVoteInitiator] = useState<string | null>(null);
   const [roomError, setRoomError] = useState<string | null>(null);
   const [showScores, setShowScores] = useState(false);
   const [roomList, setRoomList] = useState<RoomListItem[]>([]);
+
+  const handleLeaveRoom = useCallback(() => {
+    setLocalRoomId(null);
+    setRoomSync(null);
+    leaveRoom();
+  }, [leaveRoom]);
 
   // Auto-join from invite link (?room=XXXXXX)
   useEffect(() => {
