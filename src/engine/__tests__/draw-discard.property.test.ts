@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import type { Tile } from '@/types';
 import { createTileSet, shuffle } from '@/engine/tile-set';
 import { draw, discard, drawSupplement } from '@/engine/draw-discard';
 

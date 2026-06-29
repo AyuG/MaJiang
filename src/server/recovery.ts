@@ -30,7 +30,7 @@ export async function recoverActiveGames(
     if (roomManager.getRoom(roomId)) continue;
 
     roomManager.restoreRoom(roomId, {
-      players: players.map((p, i) => ({
+      players: players.map((p) => ({
         id: p.id,
         isConnected: p.isConnected,
         isReady: p.isReady,

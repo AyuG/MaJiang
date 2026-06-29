@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
 import { createTileSet, shuffle } from '@/engine/tile-set';
-import { deal } from '@/engine/deal';
 import { applyMockWall } from '@/engine/mock-wall';
 import { transition, getValidActions } from '@/engine/state-machine';
 import { canPeng, canMingGang } from '@/engine/meld-actions';
 import { TileSuit } from '@/types';
-import type { GameState, GameAction, PlayerState, Tile } from '@/types';
+import type { GameState, Tile } from '@/types';
 
 /** Helper: create a fresh DEALING-phase GameState from a seed */
 function createDealingState(seed: number): GameState {

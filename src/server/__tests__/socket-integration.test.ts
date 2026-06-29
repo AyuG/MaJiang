@@ -173,7 +173,6 @@ describe('Socket.io integration', () => {
 
     // 6. Dealer discards a tile
     // The dealer is currentPlayerIndex — find which client is the dealer
-    const dealerIndex = s1.dealerIndex;
     const allClients = [c1, c2, c3, c4];
 
     // The dealer's client is the one whose myHand has 14 tiles (dealer gets extra)

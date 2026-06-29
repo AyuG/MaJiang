@@ -3,9 +3,8 @@ import RedisMock from 'ioredis-mock';
 import { RedisStore } from '@/store/redis-store';
 import { RoomManager } from '@/server/room-manager';
 import { GameController } from '@/server/game-controller';
-import { createTileSet, shuffle } from '@/engine/tile-set';
+import { createTileSet } from '@/engine/tile-set';
 import { applyMockWall } from '@/engine/mock-wall';
-import { transition, getValidActions } from '@/engine/state-machine';
 import { TileSuit } from '@/types';
 import type { GameState, Tile, MockWallConfig } from '@/types';
 

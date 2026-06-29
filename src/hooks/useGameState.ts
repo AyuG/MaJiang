@@ -148,7 +148,7 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
       });
     };
 
-    const onPaused = (_playerId: string) => {
+    const onPaused = () => {
       setGameState((prev) => prev ? { ...prev, isPaused: true } : prev);
       if (timerRef.current) clearInterval(timerRef.current);
     };

@@ -13,19 +13,6 @@ function makeTile(suit: TileSuit, value: number, id: number): Tile {
 }
 
 /**
- * Arbitrary for a single Tile (valid suits and value ranges).
- */
-const arbTile: fc.Arbitrary<Tile> = fc
-  .oneof(
-    fc.record({ suit: fc.constant(TileSuit.WAN), value: fc.integer({ min: 1, max: 9 }) }),
-    fc.record({ suit: fc.constant(TileSuit.TIAO), value: fc.integer({ min: 1, max: 9 }) }),
-    fc.record({ suit: fc.constant(TileSuit.TONG), value: fc.integer({ min: 1, max: 9 }) }),
-    fc.record({ suit: fc.constant(TileSuit.FENG), value: fc.integer({ min: 1, max: 4 }) }),
-    fc.record({ suit: fc.constant(TileSuit.ZI), value: fc.integer({ min: 1, max: 3 }) }),
-  )
-  .chain((sv) => fc.integer({ min: 0, max: 135 }).map((id) => ({ ...sv, id })));
-
-/**
  * Arbitrary for a wall (non-empty array of tiles with unique ids).
  */
 const arbWall: fc.Arbitrary<Tile[]> = fc

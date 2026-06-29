@@ -32,14 +32,14 @@ export function MeldDisplay({ melds, ownerSeatIndex, allPlayerIds, position = 's
   return (
     <div className={`meld-row meld-row-${position}`}>
       {melds.map((meld, mi) => (
-        <MeldGroup key={mi} meld={meld} ownerSeatIndex={ownerSeatIndex} allPlayerIds={allPlayerIds} position={position} />
+        <MeldGroup key={mi} meld={meld} ownerSeatIndex={ownerSeatIndex} allPlayerIds={allPlayerIds} />
       ))}
     </div>
   );
 }
 
-function MeldGroup({ meld, ownerSeatIndex, allPlayerIds, position }: {
-  meld: Meld; ownerSeatIndex?: number; allPlayerIds?: string[]; position?: 'self' | 'right' | 'top' | 'left';
+function MeldGroup({ meld, ownerSeatIndex, allPlayerIds }: {
+  meld: Meld; ownerSeatIndex?: number; allPlayerIds?: string[];
 }) {
   // 暗杠: all face-up (own tiles)
   if (meld.type === 'an_gang') {

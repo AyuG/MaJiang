@@ -80,6 +80,7 @@ export function settleWin(
  * Returns a new empty gang records array instead of mutating the input.
  * Returns empty score changes and a fresh empty gang-record list.
  */
-export function settleDraw(_gangRecords: GangRecord[]): { scoreChanges: ScoreChange[]; clearedRecords: GangRecord[] } {
+export function settleDraw(gangRecords: GangRecord[]): { scoreChanges: ScoreChange[]; clearedRecords: GangRecord[] } {
+  void gangRecords;
   return { scoreChanges: [], clearedRecords: [] };
 }

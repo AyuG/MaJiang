@@ -358,7 +358,6 @@ export class RoomManager {
       }
     }
 
-    const agreeCount = Object.values(allVotes).filter((v) => v).length;
     const totalVoted = Object.keys(allVotes).length;
 
     // Dissolve requires: all players except initiator agree
@@ -508,7 +507,7 @@ export class RoomManager {
 }
 
 /** Generate a unique 4-char room ID with collision check */
-function generateRoomId(existingRooms: Map<string, any>): string {
+function generateRoomId(existingRooms: Map<string, RoomState>): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   for (let attempt = 0; attempt < 100; attempt++) {
     let id = '';
