@@ -17,6 +17,12 @@ export interface GangRecord {
   targetPlayerIndex?: number;   // 明杠/补杠的被杠玩家
 }
 
+/** 等待响应的玩家与可选动作 */
+export interface PendingResponse {
+  playerIndex: number;
+  actions: Array<'peng' | 'ming_gang'>;
+}
+
 /** 玩家状态 */
 export interface PlayerState {
   id: string;
@@ -59,6 +65,12 @@ export interface GameState {
   dealerFirstMatchCount: number;
   /** 超时托管的玩家 ID 列表（手动操作后取消） */
   timeoutAutoPlayerIds: string[];
+  /** 连续自动出牌计数（防止无限循环） */
+  consecutiveAutoPlayCount: number;
+  /** AWAITING 阶段可响应玩家列表（旧存档可能没有该字段） */
+  pendingResponses?: PendingResponse[];
+  /** AWAITING 阶段已选择过的玩家 ID（旧存档可能没有该字段） */
+  passedPlayerIds?: string[];
 }
 
 /** 游戏操作类型 */
@@ -66,12 +78,12 @@ export type GameAction =
   | { type: 'deal' }
   | { type: 'draw' }
   | { type: 'discard'; tileId: number }
-  | { type: 'peng' }
-  | { type: 'ming_gang' }
+  | { type: 'peng'; playerId?: string }
+  | { type: 'ming_gang'; playerId?: string }
   | { type: 'an_gang'; tileId: number }
   | { type: 'bu_gang'; tileId: number }
   | { type: 'hu' }
-  | { type: 'pass' };
+  | { type: 'pass'; playerId?: string };
 
 /** 分数变动 */
 export interface ScoreChange {

@@ -5,6 +5,7 @@ export type {
   GamePhase,
   Meld,
   GangRecord,
+  PendingResponse,
   PlayerState,
   ActionLogEntry,
   GameState,
@@ -29,4 +30,7 @@ export type {
   SocketAuth,
   RoomRole,
   RoomPermission,
+  RoomListItem,
 } from './events';
+
+export type { MockWallConfig } from '@/engine/mock-wall';

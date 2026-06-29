@@ -1,4 +1,4 @@
-import type { GameState, GameAction, ActionLogEntry, GangRecord, RuleConfig } from '@/types';
+import type { GameState, GameAction, ActionLogEntry, PendingResponse, RuleConfig, Tile } from '@/types';
 import { deal } from '@/engine/deal';
 import { draw, discard, drawSupplement } from '@/engine/draw-discard';
 import {
@@ -58,9 +58,9 @@ export function transition(state: GameState, action: GameAction): GameState {
     case 'discard':
       return handleDiscard(state, action.tileId);
     case 'peng':
-      return handlePeng(state);
+      return handlePeng(state, action.playerId);
     case 'ming_gang':
-      return handleMingGang(state);
+      return handleMingGang(state, action.playerId);
     case 'an_gang':
       return handleAnGang(state, action.tileId);
     case 'bu_gang':
@@ -68,7 +68,7 @@ export function transition(state: GameState, action: GameAction): GameState {
     case 'hu':
       return handleHu(state);
     case 'pass':
-      return handlePass(state);
+      return handlePass(state, action.playerId);
     default:
       return state;
   }
@@ -88,6 +88,10 @@ function handleDeal(state: GameState): GameState {
     players[dealOrder].hand = result.hands[i];
   }
 
+  // The dealer's last tile (14th) is considered their "draw" for 天胡 (heavenly win) check
+  const dealerHand = players[state.dealerIndex].hand;
+  const lastDrawnTileId = dealerHand.length === 14 ? dealerHand[13].id : null;
+
   return {
     ...state,
     phase: 'TURN',
@@ -95,6 +99,7 @@ function handleDeal(state: GameState): GameState {
     wall: result.wall,
     currentPlayerIndex: state.dealerIndex,
     turnCount: 1,
+    lastDrawnTileId,
     actionLog: appendLog(state.actionLog, state.dealerIndex, 'deal'),
   };
 }
@@ -134,6 +139,8 @@ function handleDiscard(state: GameState, tileId: number): GameState {
     lastDrawnTileId: null, // clear after discard
     consecutiveGangCount: 0,
     turnCount: state.turnCount + 1,
+    pendingResponses: [],
+    passedPlayerIds: [],
     actionLog: appendLog(state.actionLog, pi, 'discard', tileId),
   };
 
@@ -172,21 +179,20 @@ function handleDiscard(state: GameState, tileId: number): GameState {
   newState.dealerFirstMatchCount = dealerFirstMatchCount;
 
   // Check if other players can peng or ming_gang the discard
-  const hasResponse = checkOtherPlayersCanAct(newState, pi, discarded);
+  const pendingResponses = buildPendingResponses(newState, pi, discarded);
 
-  if (hasResponse) {
-    return { ...newState, phase: 'AWAITING' };
+  if (pendingResponses.length > 0) {
+    return { ...newState, phase: 'AWAITING', pendingResponses, passedPlayerIds: [] };
   }
 
   // No one can act
   if (newState.wall.length === 0) {
     // Wall empty → DRAW
-    const gangRecords = [...state.gangRecords];
-    settleDraw(gangRecords);
+    const { clearedRecords } = settleDraw(state.gangRecords);
     return {
       ...newState,
       phase: 'DRAW',
-      gangRecords,
+      gangRecords: clearedRecords,
     };
   }
 
@@ -204,35 +210,70 @@ function handleDiscard(state: GameState, tileId: number): GameState {
     consecutiveGangCount: 0,
     lastDiscard: { tile: discarded, playerIndex: pi },
     lastDrawnTileId: tile.id,
+    pendingResponses: [],
+    passedPlayerIds: [],
   };
 }
 
 /** Check if any other player can peng or ming_gang the discarded tile */
-function checkOtherPlayersCanAct(state: GameState, discardPlayerIndex: number, discarded: import('@/types').Tile): boolean {
-  for (let i = 0; i < 4; i++) {
-    if (i === discardPlayerIndex) continue;
-    if (canPeng(state.players[i].hand, discarded)) return true;
-    if (canMingGang(state.players[i].hand, discarded)) return true;
+function buildPendingResponses(
+  state: GameState,
+  discardPlayerIndex: number,
+  discarded: Tile,
+): PendingResponse[] {
+  const responses: PendingResponse[] = [];
+
+  for (let offset = 1; offset < 4; offset++) {
+    const i = (discardPlayerIndex + offset) % 4;
+    const actions: PendingResponse['actions'] = [];
+    if (canMingGang(state.players[i].hand, discarded)) actions.push('ming_gang');
+    if (canPeng(state.players[i].hand, discarded)) actions.push('peng');
+    if (actions.length > 0) {
+      responses.push({ playerIndex: i, actions });
+    }
   }
-  return false;
+
+  return responses;
+}
+
+function getPendingResponses(state: GameState): PendingResponse[] {
+  if (state.pendingResponses && state.pendingResponses.length > 0) {
+    return state.pendingResponses;
+  }
+
+  if (!state.lastDiscard) return [];
+  return buildPendingResponses(state, state.lastDiscard.playerIndex, state.lastDiscard.tile);
+}
+
+function findResponder(
+  state: GameState,
+  action: PendingResponse['actions'][number],
+  playerId?: string,
+): number {
+  const pendingResponses = getPendingResponses(state);
+  const passedPlayerIds = state.passedPlayerIds ?? [];
+
+  if (playerId) {
+    const playerIndex = state.players.findIndex((p) => p.id === playerId);
+    if (playerIndex === -1 || passedPlayerIds.includes(playerId)) return -1;
+    return pendingResponses.some((r) => r.playerIndex === playerIndex && r.actions.includes(action))
+      ? playerIndex
+      : -1;
+  }
+
+  const response = pendingResponses.find((r) => r.actions.includes(action));
+  return response?.playerIndex ?? -1;
 }
 
 /** AWAITING: handle peng */
-function handlePeng(state: GameState): GameState {
+function handlePeng(state: GameState, playerId?: string): GameState {
   if (state.phase !== 'AWAITING' || !state.lastDiscard) return state;
 
   const discarded = state.lastDiscard.tile;
   const discardPlayer = state.lastDiscard.playerIndex;
 
   // Find the player who can peng (first one found in order after discard player)
-  let pengPlayer = -1;
-  for (let offset = 1; offset < 4; offset++) {
-    const i = (discardPlayer + offset) % 4;
-    if (canPeng(state.players[i].hand, discarded)) {
-      pengPlayer = i;
-      break;
-    }
-  }
+  const pengPlayer = findResponder(state, 'peng', playerId);
   if (pengPlayer === -1) return state;
 
   const players = clonePlayers(state);
@@ -258,26 +299,21 @@ function handlePeng(state: GameState): GameState {
     consecutiveGangCount: 0,
     lastDiscard: null,
     lastDrawnTileId: null, // 碰牌后没有摸牌，不能胡
+    pendingResponses: [],
+    passedPlayerIds: [],
     actionLog: appendLog(state.actionLog, pengPlayer, 'peng', discarded.id),
   };
 }
 
 /** AWAITING: handle ming_gang */
-function handleMingGang(state: GameState): GameState {
+function handleMingGang(state: GameState, playerId?: string): GameState {
   if (state.phase !== 'AWAITING' || !state.lastDiscard) return state;
 
   const discarded = state.lastDiscard.tile;
   const discardPlayer = state.lastDiscard.playerIndex;
 
   // Find the player who can ming_gang
-  let gangPlayer = -1;
-  for (let offset = 1; offset < 4; offset++) {
-    const i = (discardPlayer + offset) % 4;
-    if (canMingGang(state.players[i].hand, discarded)) {
-      gangPlayer = i;
-      break;
-    }
-  }
+  const gangPlayer = findResponder(state, 'ming_gang', playerId);
   if (gangPlayer === -1) return state;
 
   const players = clonePlayers(state);
@@ -305,8 +341,7 @@ function handleMingGang(state: GameState): GameState {
 
   if (state.wall.length === 0) {
     // No tiles to draw, go to DRAW
-    const clearedRecords = [...gangRecords];
-    settleDraw(clearedRecords);
+    const { clearedRecords } = settleDraw(gangRecords);
     return {
       ...state,
       phase: 'DRAW',
@@ -314,6 +349,8 @@ function handleMingGang(state: GameState): GameState {
       currentPlayerIndex: gangPlayer,
       gangRecords: clearedRecords,
       lastDiscard: null,
+      pendingResponses: [],
+      passedPlayerIds: [],
       actionLog: appendLog(state.actionLog, gangPlayer, 'ming_gang', discarded.id),
     };
   }
@@ -330,6 +367,8 @@ function handleMingGang(state: GameState): GameState {
     consecutiveGangCount: state.consecutiveGangCount + 1,
     gangRecords,
     lastDiscard: null,
+    pendingResponses: [],
+    passedPlayerIds: [],
     actionLog: appendLog(state.actionLog, gangPlayer, 'ming_gang', discarded.id),
   };
 
@@ -357,8 +396,7 @@ function handleAnGang(state: GameState, tileId: number): GameState {
   const position: 'last' | 'second_last' = 'last';
 
   if (state.wall.length === 0) {
-    const clearedRecords = [...gangRecords];
-    settleDraw(clearedRecords);
+    const { clearedRecords } = settleDraw(gangRecords);
     return {
       ...state,
       phase: 'DRAW',
@@ -421,8 +459,7 @@ function handleBuGang(state: GameState, tileId: number): GameState {
   const position: 'last' | 'second_last' = 'last';
 
   if (state.wall.length === 0) {
-    const clearedRecords = [...gangRecords];
-    settleDraw(clearedRecords);
+    const { clearedRecords } = settleDraw(gangRecords);
     return {
       ...state,
       phase: 'DRAW',
@@ -483,24 +520,51 @@ function handleHu(state: GameState): GameState {
 }
 
 /** AWAITING: handle pass — all players pass, move to next player's TURN */
-function handlePass(state: GameState): GameState {
+function handlePass(state: GameState, playerId?: string): GameState {
   if (state.phase !== 'AWAITING') return state;
 
   const discardPlayer = state.lastDiscard?.playerIndex ?? state.currentPlayerIndex;
   const nextPlayer = (discardPlayer + 1) % 4;
+  const pendingResponses = getPendingResponses(state);
+  let passPlayerIndex = nextPlayer;
+
+  if (pendingResponses.length > 0) {
+    const passPlayerId = playerId ?? state.players[pendingResponses[0].playerIndex]?.id;
+    passPlayerIndex = state.players.findIndex((p) => p.id === passPlayerId);
+    if (
+      passPlayerIndex === -1 ||
+      !pendingResponses.some((r) => r.playerIndex === passPlayerIndex)
+    ) {
+      return state;
+    }
+
+    const passedPlayerIds = [...new Set([...(state.passedPlayerIds ?? []), passPlayerId])];
+    const allPassed = pendingResponses.every((r) =>
+      passedPlayerIds.includes(state.players[r.playerIndex].id),
+    );
+
+    if (!allPassed) {
+      return {
+        ...state,
+        passedPlayerIds,
+        actionLog: appendLog(state.actionLog, passPlayerIndex, 'pass'),
+      };
+    }
+  }
 
   // If wall is empty → DRAW
   if (state.wall.length === 0) {
-    const gangRecords = [...state.gangRecords];
-    settleDraw(gangRecords);
+    const { clearedRecords } = settleDraw(state.gangRecords);
     return {
       ...state,
       phase: 'DRAW',
       currentPlayerIndex: nextPlayer,
       consecutiveGangCount: 0,
-      gangRecords,
+      gangRecords: clearedRecords,
       lastDiscard: null,
-      actionLog: appendLog(state.actionLog, discardPlayer, 'pass'),
+      pendingResponses: [],
+      passedPlayerIds: [],
+      actionLog: appendLog(state.actionLog, passPlayerIndex, 'pass'),
     };
   }
 
@@ -518,7 +582,9 @@ function handlePass(state: GameState): GameState {
     consecutiveGangCount: 0,
     lastDiscard: null,
     lastDrawnTileId: tile.id,
-    actionLog: appendLog(state.actionLog, nextPlayer, 'pass'),
+    pendingResponses: [],
+    passedPlayerIds: [],
+    actionLog: appendLog(state.actionLog, passPlayerIndex, 'pass'),
   };
 }
 
@@ -616,4 +682,40 @@ export function getValidActions(state: GameState): GameAction[] {
   }
 
   return actions;
+}
+
+/**
+ * Get valid actions for one concrete player. Server-side callers should use
+ * this instead of the global action list so a socket cannot operate for
+ * another player.
+ */
+export function getValidActionsForPlayer(state: GameState, playerId: string): GameAction[] {
+  const playerIndex = state.players.findIndex((p) => p.id === playerId);
+  if (playerIndex === -1) return [];
+
+  switch (state.phase) {
+    case 'TURN':
+      if (state.currentPlayerIndex !== playerIndex) return [];
+      return getValidActions(state);
+
+    case 'AWAITING': {
+      const player = state.players[playerIndex];
+      if ((state.passedPlayerIds ?? []).includes(player.id)) return [];
+
+      const response = getPendingResponses(state).find((r) => r.playerIndex === playerIndex);
+      if (!response) return [];
+
+      const actions: GameAction[] = [];
+      if (response.actions.includes('ming_gang')) actions.push({ type: 'ming_gang', playerId });
+      if (response.actions.includes('peng')) actions.push({ type: 'peng', playerId });
+      actions.push({ type: 'pass', playerId });
+      return actions;
+    }
+
+    case 'DEALING':
+      return getValidActions(state);
+
+    default:
+      return [];
+  }
 }

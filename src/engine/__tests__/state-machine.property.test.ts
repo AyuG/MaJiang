@@ -5,6 +5,7 @@ import { deal } from '@/engine/deal';
 import { applyMockWall } from '@/engine/mock-wall';
 import { transition, getValidActions } from '@/engine/state-machine';
 import { canPeng, canMingGang } from '@/engine/meld-actions';
+import { TileSuit } from '@/types';
 import type { GameState, GameAction, PlayerState, Tile } from '@/types';
 
 /** Helper: create a fresh DEALING-phase GameState from a seed */
@@ -36,6 +37,7 @@ function createDealingState(seed: number): GameState {
     dealerFirstDiscard: null,
     dealerFirstMatchCount: 0,
     timeoutAutoPlayerIds: [],
+    consecutiveAutoPlayCount: 0,
   };
 }
 
@@ -44,6 +46,16 @@ function createDealingStateWithDealer(seed: number, dealerIndex: number): GameSt
   const state = createDealingState(seed);
   state.dealerIndex = dealerIndex;
   return state;
+}
+
+function passAllPending(state: GameState): GameState {
+  let next = state;
+  for (const response of state.pendingResponses ?? []) {
+    if (next.phase !== 'AWAITING') break;
+    const playerId = state.players[response.playerIndex].id;
+    next = transition(next, { type: 'pass', playerId });
+  }
+  return next;
 }
 
 /**
@@ -85,7 +97,7 @@ describe('Property 4: 状态机转换正确性', () => {
     );
   });
 
-  it('TURN + discard → AWAITING', () => {
+  it('TURN + discard → AWAITING (if others can act) or TURN (auto-draw if no one can act)', () => {
     fc.assert(
       fc.property(fc.integer(), (seed) => {
         // Deal first
@@ -102,7 +114,26 @@ describe('Property 4: 状态机转换正确性', () => {
           tileId: tileToDiscard.id,
         });
 
-        expect(afterDiscard.phase).toBe('AWAITING');
+        // Check if any other player can act on the discarded tile
+        const canAnyoneAct = turnState.players.some((p, i) => {
+          if (i === dealer) return false;
+          const hand = p.hand;
+          const tile = tileToDiscard;
+          // Check for peng (3 matching tiles)
+          const matchingCount = hand.filter(
+            (t) => t.suit === tile.suit && t.value === tile.value,
+          ).length;
+          return matchingCount >= 2; // 2 in hand + 1 discarded = 3 for peng
+        });
+
+        if (canAnyoneAct) {
+          // Someone can act → AWAITING
+          expect(afterDiscard.phase).toBe('AWAITING');
+        } else {
+          // No one can act → auto-draw for next player → TURN
+          expect(afterDiscard.phase).toBe('TURN');
+          expect(afterDiscard.currentPlayerIndex).toBe((dealer + 1) % 4);
+        }
         expect(afterDiscard.lastDiscard).not.toBeNull();
         expect(afterDiscard.lastDiscard!.tile.id).toBe(tileToDiscard.id);
         expect(afterDiscard.lastDiscard!.playerIndex).toBe(dealer);
@@ -111,22 +142,30 @@ describe('Property 4: 状态机转换正确性', () => {
     );
   });
 
-  it('AWAITING + all pass → next player TURN', () => {
+  it('AWAITING + all pass → next player TURN (or TURN + auto-draw if no one can act)', () => {
     fc.assert(
       fc.property(fc.integer(), (seed) => {
-        // Deal → discard → AWAITING
+        // Deal → discard → AWAITING (or TURN with auto-draw)
         const dealing = createDealingState(seed);
         const turnState = transition(dealing, { type: 'deal' });
         const dealer = turnState.currentPlayerIndex;
         const tileToDiscard = turnState.players[dealer].hand[0];
-        const awaitingState = transition(turnState, {
+        const afterDiscard = transition(turnState, {
           type: 'discard',
           tileId: tileToDiscard.id,
         });
-        expect(awaitingState.phase).toBe('AWAITING');
 
-        // All other players pass
-        const afterPass = transition(awaitingState, { type: 'pass' });
+        // If no one could act, afterDiscard is already TURN with auto-draw
+        if (afterDiscard.phase === 'TURN') {
+          expect(afterDiscard.currentPlayerIndex).toBe((dealer + 1) % 4);
+          return;
+        }
+
+        // Otherwise, we're in AWAITING
+        expect(afterDiscard.phase).toBe('AWAITING');
+
+        // All pending responders pass
+        const afterPass = passAllPending(afterDiscard);
 
         expect(afterPass.phase).toBe('TURN');
         // Next player should be (dealer + 1) % 4
@@ -134,6 +173,88 @@ describe('Property 4: 状态机转换正确性', () => {
       }),
       { numRuns: 100 },
     );
+  });
+
+  it('AWAITING keeps waiting until every pending responder passes', () => {
+    const discardTile: Tile = { suit: TileSuit.WAN, value: 1, id: 1 };
+    const state: GameState = {
+      ...createDealingState(1),
+      phase: 'TURN',
+      wall: [{ suit: TileSuit.TIAO, value: 9, id: 99 }],
+      players: [
+        {
+          ...createDealingState(1).players[0],
+          id: 'p0',
+          hand: [discardTile],
+        },
+        {
+          ...createDealingState(1).players[1],
+          id: 'p1',
+          hand: [
+            { suit: TileSuit.WAN, value: 1, id: 2 },
+            { suit: TileSuit.WAN, value: 1, id: 3 },
+          ],
+        },
+        {
+          ...createDealingState(1).players[2],
+          id: 'p2',
+          hand: [
+            { suit: TileSuit.WAN, value: 1, id: 4 },
+            { suit: TileSuit.WAN, value: 1, id: 5 },
+          ],
+        },
+        { ...createDealingState(1).players[3], id: 'p3', hand: [] },
+      ],
+    };
+
+    const awaiting = transition(state, { type: 'discard', tileId: discardTile.id });
+    expect(awaiting.phase).toBe('AWAITING');
+    expect(awaiting.pendingResponses?.map((r) => r.playerIndex)).toEqual([1, 2]);
+
+    const afterP1Pass = transition(awaiting, { type: 'pass', playerId: 'p1' });
+    expect(afterP1Pass.phase).toBe('AWAITING');
+    expect(afterP1Pass.passedPlayerIds).toContain('p1');
+
+    const afterP2Pass = transition(afterP1Pass, { type: 'pass', playerId: 'p2' });
+    expect(afterP2Pass.phase).toBe('TURN');
+    expect(afterP2Pass.currentPlayerIndex).toBe(1);
+  });
+
+  it('a later pending responder can still peng after an earlier responder passes', () => {
+    const discardTile: Tile = { suit: TileSuit.WAN, value: 1, id: 11 };
+    const base = createDealingState(2);
+    const state: GameState = {
+      ...base,
+      phase: 'TURN',
+      players: [
+        { ...base.players[0], id: 'p0', hand: [discardTile] },
+        {
+          ...base.players[1],
+          id: 'p1',
+          hand: [
+            { suit: TileSuit.WAN, value: 1, id: 12 },
+            { suit: TileSuit.WAN, value: 1, id: 13 },
+          ],
+        },
+        {
+          ...base.players[2],
+          id: 'p2',
+          hand: [
+            { suit: TileSuit.WAN, value: 1, id: 14 },
+            { suit: TileSuit.WAN, value: 1, id: 15 },
+          ],
+        },
+        { ...base.players[3], id: 'p3', hand: [] },
+      ],
+    };
+
+    const awaiting = transition(state, { type: 'discard', tileId: discardTile.id });
+    const afterP1Pass = transition(awaiting, { type: 'pass', playerId: 'p1' });
+    const afterP2Peng = transition(afterP1Pass, { type: 'peng', playerId: 'p2' });
+
+    expect(afterP2Peng.phase).toBe('TURN');
+    expect(afterP2Peng.currentPlayerIndex).toBe(2);
+    expect(afterP2Peng.players[2].melds[0]?.type).toBe('peng');
   });
 
   it('TURN + hu (zi mo) → WIN when hand is winning', () => {
@@ -212,6 +333,7 @@ describe('Property 4: 状态机转换正确性', () => {
           dealerFirstDiscard: null,
           dealerFirstMatchCount: 0,
           timeoutAutoPlayerIds: [],
+          consecutiveAutoPlayCount: 0,
         };
 
         const turnState = transition(state, { type: 'deal' });
@@ -283,9 +405,9 @@ describe('Property 4: 状态机转换正确性', () => {
         }
 
         if (canAnyoneAct) {
-          // Goes to AWAITING first, then pass → DRAW
+          // Goes to AWAITING first, then all pending responders pass → DRAW
           expect(result.phase).toBe('AWAITING');
-          const afterPass = transition(result, { type: 'pass' });
+          const afterPass = passAllPending(result);
           expect(afterPass.phase).toBe('DRAW');
         } else {
           expect(result.phase).toBe('DRAW');
@@ -316,20 +438,23 @@ describe('Property 19: 操作日志完整性', () => {
         const turnState = transition(dealing, { type: 'deal' });
         expect(turnState.actionLog.length).toBe(logBefore + 1);
 
-        // discard
+        // discard - may go to AWAITING or TURN (auto-draw)
         const dealer = turnState.currentPlayerIndex;
         const tile = turnState.players[dealer].hand[0];
         const logBeforeDiscard = turnState.actionLog.length;
-        const awaitingState = transition(turnState, {
+        const afterDiscard = transition(turnState, {
           type: 'discard',
           tileId: tile.id,
         });
-        expect(awaitingState.actionLog.length).toBe(logBeforeDiscard + 1);
+        expect(afterDiscard.actionLog.length).toBe(logBeforeDiscard + 1);
 
-        // pass
-        const logBeforePass = awaitingState.actionLog.length;
-        const nextTurn = transition(awaitingState, { type: 'pass' });
-        expect(nextTurn.actionLog.length).toBe(logBeforePass + 1);
+        // If we went to AWAITING, pass will add a log entry
+        // If we went to TURN (auto-draw), no pass needed
+        if (afterDiscard.phase === 'AWAITING') {
+          const logBeforePass = afterDiscard.actionLog.length;
+          const nextTurn = passAllPending(afterDiscard);
+          expect(nextTurn.actionLog.length).toBeGreaterThan(logBeforePass);
+        }
       }),
       { numRuns: 100 },
     );
@@ -347,7 +472,9 @@ describe('Property 19: 操作日志完整性', () => {
           type: 'discard',
           tileId: tile.id,
         });
-        const nextTurn = transition(awaitingState, { type: 'pass' });
+        const nextTurn = awaitingState.phase === 'AWAITING'
+          ? passAllPending(awaitingState)
+          : awaitingState;
 
         const log = nextTurn.actionLog;
         for (let i = 1; i < log.length; i++) {
@@ -372,19 +499,21 @@ describe('Property 19: 操作日志完整性', () => {
         // discard action log
         const dealer = turnState.currentPlayerIndex;
         const tile = turnState.players[dealer].hand[0];
-        const awaitingState = transition(turnState, {
+        const afterDiscard = transition(turnState, {
           type: 'discard',
           tileId: tile.id,
         });
-        const discardLog = awaitingState.actionLog[awaitingState.actionLog.length - 1];
+        const discardLog = afterDiscard.actionLog[afterDiscard.actionLog.length - 1];
         expect(discardLog.action).toBe('discard');
         expect(discardLog.playerIndex).toBe(dealer);
         expect(discardLog.tileId).toBe(tile.id);
 
-        // pass action log
-        const nextTurn = transition(awaitingState, { type: 'pass' });
-        const passLog = nextTurn.actionLog[nextTurn.actionLog.length - 1];
-        expect(passLog.action).toBe('pass');
+        // If we went to AWAITING, pass will add a log entry
+        if (afterDiscard.phase === 'AWAITING') {
+          const nextTurn = passAllPending(afterDiscard);
+          const passLog = nextTurn.actionLog[nextTurn.actionLog.length - 1];
+          expect(passLog.action).toBe('pass');
+        }
       }),
       { numRuns: 100 },
     );

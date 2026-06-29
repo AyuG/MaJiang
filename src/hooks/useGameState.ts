@@ -270,7 +270,13 @@ export function useGameState(socket: Socket<ServerEvents, ClientEvents> | null, 
       }
     }
 
-    if (gameState.phase === 'AWAITING' && gameState.currentPlayerIndex !== myIndex) {
+    if (
+      gameState.phase === 'AWAITING' &&
+      gameState.currentPlayerIndex !== myIndex &&
+      typeof myId === 'string' &&
+      gameState.pendingResponsePlayerIds.includes(myId) &&
+      !gameState.passedPlayerIds.includes(myId)
+    ) {
       const lastDiscard = gameState.lastDiscard;
       if (lastDiscard && myIndex >= 0) {
         const myHand = gameState.myHand;

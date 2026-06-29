@@ -32,6 +32,8 @@ export interface ClientGameState {
   lastDrawnTileId: number | null;
   isPaused: boolean;
   autoPlayPlayerIds: string[];
+  pendingResponsePlayerIds: string[];
+  passedPlayerIds: string[];
 }
 
 /** 客户端 → 服务端事件 */
@@ -76,8 +78,17 @@ export interface DiceResultData {
   dealerIndex: number;
 }
 
+/** 房间列表项 */
+export interface RoomListItem {
+  roomId: string;
+  playerCount: number;
+  status: 'waiting' | 'playing' | 'finished';
+}
+
 /** 服务端 → 客户端事件 */
 export interface ServerEvents {
+  'player:identity': (data: { playerId: string; nickname: string }) => void;
+  'room:list': (rooms: RoomListItem[]) => void;
   'room:created': (roomId: string) => void;
   'room:joined': (data: { id: string; seat: number }) => void;
   'room:player-ready': (playerId: string) => void;

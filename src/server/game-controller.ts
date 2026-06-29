@@ -4,7 +4,8 @@ import type { RoomManager } from '@/server/room-manager';
 import type { RedisStore } from '@/store/redis-store';
 import { createTileSet, shuffle } from '@/engine/tile-set';
 import { applyMockWall } from '@/engine/mock-wall';
-import { transition, getValidActions } from '@/engine/state-machine';
+import { transition, getValidActionsForPlayer } from '@/engine/state-machine';
+import { logger } from '@/server/logger';
 
 /**
  * GameController — orchestrates game lifecycle, delegates to the
@@ -61,6 +62,9 @@ export class GameController {
       dealerFirstDiscard: null,
       dealerFirstMatchCount: 0,
       timeoutAutoPlayerIds: [],
+      consecutiveAutoPlayCount: 0,
+      pendingResponses: [],
+      passedPlayerIds: [],
     };
 
     // Deal
@@ -82,7 +86,7 @@ export class GameController {
     if (!state) throw new Error(`No game state for room ${roomId}`);
 
     // Validate the action is legal
-    const validActions = getValidActions(state);
+    const validActions = getValidActionsForPlayer(state, playerId);
     const isValid = validActions.some((a) => {
       if (a.type !== action.type) return false;
       if ('tileId' in a && 'tileId' in action) return a.tileId === action.tileId;
@@ -93,7 +97,13 @@ export class GameController {
       throw new Error(`Invalid action: ${action.type}`);
     }
 
-    let newState = transition(state, action);
+    const actorAction = attachActorToAction(action, playerId);
+    let newState = transition(state, actorAction);
+
+    // Reset consecutive auto-play count on any manual action
+    if (newState.consecutiveAutoPlayCount !== 0) {
+      newState = { ...newState, consecutiveAutoPlayCount: 0 };
+    }
 
     // Cancel timeout auto-play for this player on manual action
     if (newState.timeoutAutoPlayerIds?.includes(playerId)) {
@@ -111,10 +121,13 @@ export class GameController {
    * Handle timeout for a player (smart auto-play).
    * TURN timeout → check hu first, then auto draw + smart discard.
    * AWAITING timeout → auto pass.
+   * @param roomId - Room ID
+   * @param playerId - Player ID (used for logging/debugging, actual player determined by current turn)
+   * @param phase - Current game phase
    */
   async handleTimeout(
     roomId: string,
-    _playerId: string,
+    playerId: string,
     phase: GamePhase,
   ): Promise<GameState> {
     const state = await this.redisStore.getGameState(roomId);
@@ -131,6 +144,15 @@ export class GameController {
       const pi = state.currentPlayerIndex;
       const player = state.players[pi];
 
+      // Log for debugging: verify the timeout player matches current player
+      if (playerId && player.id !== playerId) {
+        logger.warn('handleTimeout', `Timeout player ${playerId} does not match current player ${player.id}`);
+      }
+
+      // Increment consecutive auto-play count
+      const newAutoPlayCount = (state.consecutiveAutoPlayCount ?? 0) + 1;
+      newState = { ...newState, consecutiveAutoPlayCount: newAutoPlayCount };
+
       // Mark player as timeout auto-play (only if connected — disconnected players are already tracked)
       if (player.isConnected) {
         const timeoutIds = new Set(state.timeoutAutoPlayerIds ?? []);
@@ -146,7 +168,7 @@ export class GameController {
 
       // Check if can hu — auto-hu takes priority over discard
       const currentPlayer = newState.players[newState.currentPlayerIndex];
-      const validActions = getValidActions(newState);
+      const validActions = getValidActionsForPlayer(newState, currentPlayer.id);
       const canHu = validActions.some((a) => a.type === 'hu');
       if (canHu) {
         newState = transition(newState, { type: 'hu' });
@@ -165,7 +187,15 @@ export class GameController {
         };
       }
     } else if (phase === 'AWAITING') {
-      newState = transition(newState, { type: 'pass' });
+      const pendingIds = state.players
+        .filter((p) => getValidActionsForPlayer(state, p.id).some((a) => a.type === 'pass'))
+        .map((p) => p.id);
+      const passIds = pendingIds.includes(playerId) ? [playerId] : pendingIds;
+
+      for (const passId of passIds) {
+        if (newState.phase !== 'AWAITING') break;
+        newState = transition(newState, { type: 'pass', playerId: passId });
+      }
     }
 
     await this.redisStore.saveGameState(roomId, newState);
@@ -319,12 +349,22 @@ export class GameController {
       dealerFirstDiscard: null,
       dealerFirstMatchCount: 0,
       timeoutAutoPlayerIds: [],
+      consecutiveAutoPlayCount: 0,
+      pendingResponses: [],
+      passedPlayerIds: [],
     };
 
     const dealtState = transition(initialState, { type: 'deal' });
     await this.redisStore.saveGameState(roomId, dealtState);
     return dealtState;
   }
+}
+
+function attachActorToAction(action: GameAction, playerId: string): GameAction {
+  if (action.type === 'peng' || action.type === 'ming_gang' || action.type === 'pass') {
+    return { ...action, playerId };
+  }
+  return action;
 }
 
 /**

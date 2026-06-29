@@ -46,6 +46,10 @@ export function toClientState(state: GameState, playerId: string): ClientGameSta
     lastDrawnTileId: state.lastDrawnTileId ?? null,
     isPaused: state.isPaused,
     autoPlayPlayerIds: uniqueAutoPlay,
+    pendingResponsePlayerIds: (state.pendingResponses ?? [])
+      .map((r) => state.players[r.playerIndex]?.id)
+      .filter((id): id is string => Boolean(id)),
+    passedPlayerIds: state.passedPlayerIds ?? [],
   };
 }
 
@@ -57,6 +61,17 @@ export function setupSocketHandlers(
   const socketMap = new Map<string, SocketMapping>();
   const roundCounters = new Map<string, number>();
   const pendingNewGameRooms = new Map<string, Array<{ id: string; seat: import('@/server/room-manager').SeatPosition }>>();
+
+  // Broadcast room list to all connected sockets
+  function broadcastRoomList(): void {
+    const rooms = roomManager.getAllRooms();
+    const roomList = rooms.map((room) => ({
+      roomId: room.roomId,
+      playerCount: room.players.length,
+      status: room.status,
+    }));
+    io.emit('room:list', roomList);
+  }
 
   // Create TurnTimer with callback that uses broadcastGameState
   const turnTimer = new TurnTimer(async (roomId, playerId, phase) => {
@@ -91,7 +106,14 @@ export function setupSocketHandlers(
       }
     }
 
-    let scoreHistory: unknown[] = [];
+    // Define score history type
+    interface ScoreHistoryEntry {
+      round: number;
+      result: string;
+      scores: Array<{ seat: string; delta: number }>;
+    }
+
+    let scoreHistory: ScoreHistoryEntry[] = [];
     try {
       const log = await gameController['redisStore'].getScoreLog(roomId);
       const SEATS = ['东', '南', '西', '北'];
@@ -104,7 +126,7 @@ export function setupSocketHandlers(
       logger.warn('dissolveWithScores', 'Failed to fetch score log', err);
     }
 
-    const history = scoreHistory.length > 0 ? scoreHistory as Array<{ round: number; result: string; scores: Array<{ seat: string; delta: number }> }> : undefined;
+    const history = scoreHistory.length > 0 ? scoreHistory : undefined;
 
     // Check if this dissolve should create a new game
     const newGamePlayers = pendingNewGameRooms.get(roomId);
@@ -205,6 +227,8 @@ export function setupSocketHandlers(
         })),
       };
       io.to(roomId).emit('room:sync', syncData);
+      // Also broadcast updated room list
+      broadcastRoomList();
     }
   }
 
@@ -230,13 +254,34 @@ export function setupSocketHandlers(
   io.on('connection', (socket: Socket<ClientEvents, ServerEvents>) => {
 
     const auth = socket.handshake.auth as SocketAuth;
-    const persistentId = auth?.playerId || socket.id;
+
+    // Server generates player ID if not provided or if it's a client-generated ID
+    // Client-generated IDs start with 'p_' - we replace them with server-generated ones
+    let persistentId = auth?.playerId;
+    if (!persistentId || persistentId.startsWith('p_')) {
+      // Generate server-side ID: 'srv_' + random + timestamp
+      persistentId = 'srv_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
+    }
+
+    // Nickname can be customized by client, default to shortened ID
     const persistentNickname = auth?.nickname || persistentId.slice(0, 8);
 
     // Always update nickname from client (supports nickname change on reconnect)
     if (persistentNickname) {
       nicknameMap.set(persistentId, persistentNickname);
     }
+
+    // Send the player ID to the client (especially important for new server-generated IDs)
+    socket.emit('player:identity', { playerId: persistentId, nickname: persistentNickname });
+
+    // Send room list to the newly connected client
+    const rooms = roomManager.getAllRooms();
+    const roomList = rooms.map((room) => ({
+      roomId: room.roomId,
+      playerCount: room.players.length,
+      status: room.status,
+    }));
+    socket.emit('room:list', roomList);
 
     // ── Force cleanup: if this player has a stale socket mapping, remove it ──
     for (const [oldSid, m] of socketMap.entries()) {
@@ -707,6 +752,8 @@ async function broadcastGameState(
   onRoundEnd?: (roomId: string, state: GameState) => void,
   onAutoPlay?: (roomId: string, playerId: string, phase: GameState['phase']) => Promise<void>,
 ): Promise<void> {
+  const MAX_CONSECUTIVE_AUTO_PLAYS = 10;
+
   const sockets = await io.in(roomId).fetchSockets();
   for (const s of sockets) {
     const m = socketMap.get(s.id);
@@ -722,6 +769,15 @@ async function broadcastGameState(
       if (!currentPlayer.isConnected) {
         // Disconnected player: auto-play immediately, no timer
         if (turnTimer) turnTimer.clear(roomId);
+
+        // Check consecutive auto-play count from state
+        const count = state.consecutiveAutoPlayCount ?? 0;
+        if (count >= MAX_CONSECUTIVE_AUTO_PLAYS) {
+          logger.warn('AutoPlay', `Max consecutive auto-plays (${MAX_CONSECUTIVE_AUTO_PLAYS}) reached for room ${roomId}`);
+          return;
+        }
+        // Note: count will be incremented by handleAutoPlay via gameController
+
         if (onAutoPlay) {
           // Small delay to avoid synchronous recursion
           setTimeout(() => onAutoPlay(roomId, currentPlayer.id, 'TURN'), 100);
@@ -729,42 +785,48 @@ async function broadcastGameState(
       } else if ((state.timeoutAutoPlayerIds ?? []).includes(currentPlayer.id)) {
         // Timeout-auto player: also auto-play immediately
         if (turnTimer) turnTimer.clear(roomId);
+
+        const count = state.consecutiveAutoPlayCount ?? 0;
+        if (count >= MAX_CONSECUTIVE_AUTO_PLAYS) {
+          logger.warn('AutoPlay', `Max consecutive auto-plays (${MAX_CONSECUTIVE_AUTO_PLAYS}) reached for room ${roomId}`);
+          return;
+        }
+
         if (onAutoPlay) {
           setTimeout(() => onAutoPlay(roomId, currentPlayer.id, 'TURN'), 100);
         }
       } else {
-        // Normal player: start timer
+        // Normal player: start timer, auto-play counter remains as-is
         if (turnTimer) turnTimer.startTurnTimer(roomId, currentPlayer.id);
       }
     }
   } else if (state.phase === 'AWAITING') {
     // Check if any responding player is disconnected → auto-pass immediately
     const discardPlayerIdx = state.lastDiscard?.playerIndex ?? -1;
-    let hasDisconnectedResponder = false;
+    let disconnectedResponderId = '';
     if (state.lastDiscard) {
       for (let i = 0; i < 4; i++) {
         if (i === discardPlayerIdx) continue;
         const p = state.players[i];
+        if ((state.passedPlayerIds ?? []).includes(p.id)) continue;
         if (!p.isConnected) {
           if (checkCanPeng(p.hand, state.lastDiscard.tile) || checkCanMingGang(p.hand, state.lastDiscard.tile)) {
-            hasDisconnectedResponder = true;
+            disconnectedResponderId = p.id;
             break;
           }
         }
       }
     }
 
-    if (hasDisconnectedResponder && onAutoPlay) {
+    if (disconnectedResponderId && onAutoPlay) {
       // Disconnected player can respond → auto-pass immediately
       if (turnTimer) turnTimer.clear(roomId);
-      setTimeout(() => onAutoPlay(roomId, '', 'AWAITING'), 100);
+      setTimeout(() => onAutoPlay(roomId, disconnectedResponderId, 'AWAITING'), 100);
     } else if (turnTimer) {
-      const playerId = state.lastDiscard?.playerIndex !== undefined
-        ? state.players[state.lastDiscard.playerIndex]?.id ?? ''
-        : '';
-      turnTimer.startAwaitingTimer(roomId, playerId);
+      turnTimer.startAwaitingTimer(roomId, '');
     }
   } else if (state.phase === 'WIN' || state.phase === 'DRAW') {
+    // Auto-play counter will be reset in next round's GameState
     if (turnTimer) turnTimer.clear(roomId);
     if (onRoundEnd) onRoundEnd(roomId, state);
   }

@@ -20,6 +20,73 @@ function findTiles(allTiles: Tile[], suit: TileSuit, value: number, count: numbe
   return matches.slice(0, count);
 }
 
+function makeTile(suit: TileSuit, value: number, id: number): Tile {
+  return { suit, value, id };
+}
+
+function buildManualState(roomId: string): GameState {
+  return {
+    phase: 'TURN',
+    roomId,
+    players: [
+      {
+        id: 'p1',
+        hand: [makeTile(TileSuit.WAN, 1, 1), makeTile(TileSuit.TIAO, 9, 50)],
+        melds: [],
+        discardPool: [],
+        score: 0,
+        isConnected: true,
+        isReady: true,
+      },
+      {
+        id: 'p2',
+        hand: [makeTile(TileSuit.WAN, 1, 2), makeTile(TileSuit.WAN, 1, 3)],
+        melds: [],
+        discardPool: [],
+        score: 0,
+        isConnected: true,
+        isReady: true,
+      },
+      {
+        id: 'p3',
+        hand: [makeTile(TileSuit.WAN, 1, 4), makeTile(TileSuit.WAN, 1, 5)],
+        melds: [],
+        discardPool: [],
+        score: 0,
+        isConnected: true,
+        isReady: true,
+      },
+      {
+        id: 'p4',
+        hand: [],
+        melds: [],
+        discardPool: [],
+        score: 0,
+        isConnected: true,
+        isReady: true,
+      },
+    ],
+    wall: [makeTile(TileSuit.TONG, 9, 90)],
+    currentPlayerIndex: 0,
+    dealerIndex: 0,
+    seed: 1,
+    lastDiscard: null,
+    turnCount: 1,
+    roundNumber: 1,
+    consecutiveGangCount: 0,
+    gangRecords: [],
+    isPaused: false,
+    actionLog: [],
+    lastDrawnTileId: 1,
+    dealerFirstDiscard: null,
+    dealerFirstMatchCount: 0,
+    timeoutAutoPlayerIds: [],
+    consecutiveAutoPlayCount: 0,
+    pendingResponses: [],
+    passedPlayerIds: [],
+  };
+}
+
 /**
  * Build a mock wall for testing peng/gang/hu scenarios
  * Player 0 (dealer): Can win with zi mo after one round
@@ -106,7 +173,7 @@ describe('GameController Integration Tests', () => {
 
   beforeEach(() => {
     const redisMock = new RedisMock();
-    redisStore = new RedisStore(redisMock as unknown as Parameters<typeof RedisStore>[0]);
+    redisStore = new RedisStore(redisMock as unknown as ConstructorParameters<typeof RedisStore>[0]);
     roomManager = new RoomManager();
     gameController = new GameController(roomManager, redisStore);
   });
@@ -220,6 +287,38 @@ describe('GameController Integration Tests', () => {
       expect(newState.lastDiscard).not.toBeNull();
       expect(newState.lastDiscard?.tile.id).toBe(tileToDiscard.id);
       expect(newState.lastDiscard?.playerIndex).toBe(dealerIndex);
+    });
+
+    it('should reject a discard from a non-current player', async () => {
+      const manualState = buildManualState(roomId);
+      await redisStore.saveGameState(roomId, manualState);
+
+      await expect(
+        gameController.handlePlayerAction(roomId, 'p2', {
+          type: 'discard',
+          tileId: manualState.players[0].hand[0].id,
+        }),
+      ).rejects.toThrow('Invalid action');
+    });
+
+    it('should apply peng for the responding actor, not the first possible responder', async () => {
+      const manualState = buildManualState(roomId);
+      await redisStore.saveGameState(roomId, manualState);
+
+      const awaiting = await gameController.handlePlayerAction(roomId, 'p1', {
+        type: 'discard',
+        tileId: manualState.players[0].hand[0].id,
+      });
+      expect(awaiting.phase).toBe('AWAITING');
+      expect(awaiting.pendingResponses?.map((r) => r.playerIndex)).toEqual([1, 2]);
+
+      const afterP2Pass = await gameController.handlePlayerAction(roomId, 'p2', { type: 'pass' });
+      expect(afterP2Pass.phase).toBe('AWAITING');
+
+      const afterP3Peng = await gameController.handlePlayerAction(roomId, 'p3', { type: 'peng' });
+      expect(afterP3Peng.phase).toBe('TURN');
+      expect(afterP3Peng.currentPlayerIndex).toBe(2);
+      expect(afterP3Peng.players[2].melds[0]?.type).toBe('peng');
     });
 
     it('should reset consecutiveAutoPlayCount on manual action', async () => {
@@ -505,7 +604,7 @@ describe('GameController with MockWall', () => {
 
   beforeEach(() => {
     const redisMock = new RedisMock();
-    redisStore = new RedisStore(redisMock as unknown as Parameters<typeof RedisStore>[0]);
+    redisStore = new RedisStore(redisMock as unknown as ConstructorParameters<typeof RedisStore>[0]);
     roomManager = new RoomManager();
   });
 
@@ -531,7 +630,7 @@ describe('GameController with MockWall', () => {
   it('should support tail mode mock wall', async () => {
     const allTiles = createTileSet();
     const replacement = allTiles.slice(0, 10);
-    const mockConfig: MockWallConfig = { mode: 'tail', tiles: replacement, count: 10 };
+    const mockConfig: MockWallConfig = { mode: 'tail', tiles: replacement };
 
     gameController = new GameController(roomManager, redisStore, mockConfig);
 
