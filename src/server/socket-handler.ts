@@ -1,4 +1,5 @@
 import type { Server, Socket } from 'socket.io';
+import { randomUUID } from 'node:crypto';
 import type { ClientEvents, ServerEvents, ClientGameState, RoomSyncData, SocketAuth } from '@/types';
 import type { GameState } from '@/types';
 import type { GameController } from '@/server/game-controller';
@@ -259,8 +260,7 @@ export function setupSocketHandlers(
     // Client-generated IDs start with 'p_' - we replace them with server-generated ones
     let persistentId = auth?.playerId;
     if (!persistentId || persistentId.startsWith('p_')) {
-      // Generate server-side ID: 'srv_' + random + timestamp
-      persistentId = 'srv_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
+      persistentId = `srv_${randomUUID()}`;
     }
 
     // Nickname can be customized by client, default to shortened ID

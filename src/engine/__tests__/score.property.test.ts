@@ -134,7 +134,7 @@ describe('Property 12: 胡牌结算正确性', () => {
 });
 
 describe('Property 13: 流局杠分原子清零', () => {
-  it('settleDraw returns empty ScoreChange[] and clears gangRecords', () => {
+  it('settleDraw returns empty ScoreChange[] and clearedRecords', () => {
     fc.assert(
       fc.property(
         fc.array(arbGangOp, { minLength: 1, maxLength: 8 }),
@@ -142,9 +142,9 @@ describe('Property 13: 流局杠分原子清零', () => {
           const gangRecords: GangRecord[] = gangOps.map((op) =>
             recordGangScore(op.type, op.gangIdx, op.targetIdx),
           );
-          const changes = settleDraw(gangRecords);
-          expect(changes).toEqual([]);
-          expect(gangRecords).toHaveLength(0);
+          const result = settleDraw(gangRecords);
+          expect(result.scoreChanges).toEqual([]);
+          expect(result.clearedRecords).toEqual([]);
         },
       ),
       { numRuns: 100 },
@@ -161,12 +161,12 @@ describe('Property 13: 流局杠分原子清零', () => {
             recordGangScore(op.type, op.gangIdx, op.targetIdx),
           );
           const scoresBefore = [...playerScores];
-          const changes = settleDraw(gangRecords);
+          const result = settleDraw(gangRecords);
           const scoresAfter = [...scoresBefore];
-          for (const change of changes) {
+          for (const change of result.scoreChanges) {
             scoresAfter[change.playerIndex] += change.delta;
           }
-          expect(gangRecords).toHaveLength(0);
+          expect(result.clearedRecords).toEqual([]);
           expect(scoresAfter).toEqual(scoresBefore);
         },
       ),

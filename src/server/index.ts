@@ -14,18 +14,36 @@ const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
 const port = parseInt(process.env.PORT || '3000', 10);
+const hostname = process.env.HOSTNAME || '0.0.0.0';
+
+// Validate required environment variables
+if (!process.env.REDIS_URL) {
+  logger.warn('Config', 'REDIS_URL not set, using default localhost. This is not recommended for production.');
+}
+
+const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
 app.prepare().then(async () => {
   const httpServer = createServer((req, res) => {
     const parsedUrl = parse(req.url!, true);
+
+    // Health check endpoint
+    if (parsedUrl.pathname === '/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+      }));
+      return;
+    }
+
     handle(req, res, parsedUrl);
   });
 
   const io = new Server(httpServer, { cors: { origin: '*' } });
 
-  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-  
-  // Create Redis client with retry strategy
+  // Redis client with retry strategy
   const redis = new Redis(redisUrl, {
     retryStrategy: (times: number) => {
       if (times > 10) {
@@ -72,9 +90,8 @@ app.prepare().then(async () => {
   // Recover active games on startup
   await recoverActiveGames(redisStore, roomManager);
 
-  const hostname = process.env.HOSTNAME || '0.0.0.0';
-
   httpServer.listen(port, hostname, () => {
+    logger.info('Server', `Server ready on http://${hostname}:${port}`);
     console.log(`> Ready on http://${hostname}:${port}`);
   });
 });

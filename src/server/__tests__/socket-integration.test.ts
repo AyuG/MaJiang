@@ -209,4 +209,80 @@ describe('Socket.io integration', () => {
       expect(['TURN', 'AWAITING']).toContain(u.phase);
     }
   }, 15000);
+
+  it('should generate server-side player ID on first connection', async () => {
+    const client = createClient();
+
+    // Set up listener before waiting for connection
+    const identityPromise = waitForEvent<{ playerId: string; nickname: string }>(client, 'player:identity');
+    await waitConnected(client);
+
+    const identity = await identityPromise;
+
+    // Server-generated IDs should start with 'srv_'
+    expect(identity.playerId).toMatch(/^srv_/);
+    expect(identity.nickname).toBeTruthy();
+
+    client.disconnect();
+  }, 15000);
+
+  it('should preserve player ID across reconnections', async () => {
+    const client1 = createClient();
+    const identityPromise1 = waitForEvent<{ playerId: string; nickname: string }>(client1, 'player:identity');
+    await waitConnected(client1);
+
+    const identity1 = await identityPromise1;
+    const playerId = identity1.playerId;
+
+    // Disconnect and reconnect with the same ID
+    client1.disconnect();
+    await delay(100);
+
+    const client2 = ioc(`http://localhost:${port}`, {
+      transports: ['websocket'],
+      forceNew: true,
+      auth: { playerId, nickname: 'TestPlayer' },
+    }) as ClientSocket<ServerEvents, ClientEvents>;
+    clients.push(client2);
+
+    const identityPromise2 = waitForEvent<{ playerId: string; nickname: string }>(client2, 'player:identity');
+    await waitConnected(client2);
+
+    const identity2 = await identityPromise2;
+
+    // Should have received the same player ID back
+    expect(identity2.playerId).toBe(playerId);
+    expect(identity2.nickname).toBe('TestPlayer');
+
+    client2.disconnect();
+  }, 15000);
+
+  it('should broadcast room list to connected clients', async () => {
+    const client = createClient();
+    const roomListPromise1 = waitForEvent<Array<{ roomId: string; playerCount: number; status: string }>>(client, 'room:list');
+    await waitConnected(client);
+
+    // Wait for initial room list
+    const roomList1 = await roomListPromise1;
+    expect(Array.isArray(roomList1)).toBe(true);
+
+    // Create a room
+    const roomCreatedPromise = waitForEvent<string>(client, 'room:created');
+    const roomListPromise2 = waitForEvent<Array<{ roomId: string; playerCount: number; status: string }>>(client, 'room:list');
+    client.emit('room:create');
+    const roomId = await roomCreatedPromise;
+
+    // Should receive updated room list
+    const roomList2 = await roomListPromise2;
+    expect(roomList2.length).toBeGreaterThan(0);
+
+    // Find our room in the list
+    const ourRoom = roomList2.find((r) => r.roomId === roomId);
+    expect(ourRoom).toBeDefined();
+    expect(ourRoom!.playerCount).toBeGreaterThanOrEqual(1);
+    expect(ourRoom!.status).toBe('waiting');
+
+    client.disconnect();
+  }, 15000);
+
 });

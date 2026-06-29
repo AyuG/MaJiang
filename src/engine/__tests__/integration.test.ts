@@ -171,6 +171,7 @@ function createInitialState(wall: Tile[]): GameState {
     dealerFirstDiscard: null,
     dealerFirstMatchCount: 0,
     timeoutAutoPlayerIds: [],
+    consecutiveAutoPlayCount: 0,
   };
 }
 
@@ -195,7 +196,7 @@ describe('Integration: 摸-打-自摸 complete game flow', () => {
     expect(state.actionLog).toHaveLength(1);
   });
 
-  it('Step 2: player 0 discards 南風 → AWAITING', () => {
+  it('Step 2: player 0 discards 南風 → auto-draw for player 1 → TURN', () => {
     // Find the 南風 in player 0's hand
     const nanFeng = state.players[0].hand.find(
       (t) => t.suit === TileSuit.FENG && t.value === 2,
@@ -204,8 +205,11 @@ describe('Integration: 摸-打-自摸 complete game flow', () => {
 
     state = transition(state, { type: 'discard', tileId: nanFeng!.id });
 
-    expect(state.phase).toBe('AWAITING');
+    // No one can act on 南風, so auto-draw for player 1 → TURN
+    expect(state.phase).toBe('TURN');
+    expect(state.currentPlayerIndex).toBe(1);
     expect(state.players[0].hand).toHaveLength(13);
+    expect(state.players[1].hand).toHaveLength(14); // auto-drawn
     expect(state.lastDiscard).not.toBeNull();
     expect(state.lastDiscard!.tile.suit).toBe(TileSuit.FENG);
     expect(state.lastDiscard!.tile.value).toBe(2);
@@ -213,78 +217,52 @@ describe('Integration: 摸-打-自摸 complete game flow', () => {
     expect(state.actionLog).toHaveLength(2);
   });
 
-  it('Step 3: pass → player 1 draws fodder → TURN', () => {
-    state = transition(state, { type: 'pass' });
-
-    expect(state.phase).toBe('TURN');
-    expect(state.currentPlayerIndex).toBe(1);
-    expect(state.players[1].hand).toHaveLength(14);
-    expect(state.actionLog).toHaveLength(3);
-  });
-
-  it('Step 4: player 1 discards last drawn tile → AWAITING', () => {
-    // Player 1 discards the last tile in hand (the one just drawn)
+  it('Step 3: player 1 discards fodder → auto-draw for player 2 → TURN', () => {
+    // Player 1 discards the last tile in hand (the fodder just drawn)
     const tileToDiscard = state.players[1].hand[state.players[1].hand.length - 1];
 
     state = transition(state, { type: 'discard', tileId: tileToDiscard.id });
 
-    expect(state.phase).toBe('AWAITING');
-    expect(state.players[1].hand).toHaveLength(13);
-    expect(state.lastDiscard!.playerIndex).toBe(1);
-    expect(state.actionLog).toHaveLength(4);
-  });
-
-  it('Step 5: pass → player 2 draws fodder → TURN', () => {
-    state = transition(state, { type: 'pass' });
-
+    // No one can act on fodder, so auto-draw for player 2 → TURN
     expect(state.phase).toBe('TURN');
     expect(state.currentPlayerIndex).toBe(2);
-    expect(state.players[2].hand).toHaveLength(14);
-    expect(state.actionLog).toHaveLength(5);
+    expect(state.players[1].hand).toHaveLength(13);
+    expect(state.players[2].hand).toHaveLength(14); // auto-drawn
+    expect(state.lastDiscard!.playerIndex).toBe(1);
+    expect(state.actionLog).toHaveLength(3);
   });
 
-  it('Step 6: player 2 discards last drawn tile → AWAITING', () => {
+  it('Step 4: player 2 discards fodder → auto-draw for player 3 → TURN', () => {
     const tileToDiscard = state.players[2].hand[state.players[2].hand.length - 1];
     state = transition(state, { type: 'discard', tileId: tileToDiscard.id });
 
-    expect(state.phase).toBe('AWAITING');
-    expect(state.players[2].hand).toHaveLength(13);
-    expect(state.actionLog).toHaveLength(6);
-  });
-
-  it('Step 7: pass → player 3 draws fodder → TURN', () => {
-    state = transition(state, { type: 'pass' });
-
+    // No one can act on fodder, so auto-draw for player 3 → TURN
     expect(state.phase).toBe('TURN');
     expect(state.currentPlayerIndex).toBe(3);
-    expect(state.players[3].hand).toHaveLength(14);
-    expect(state.actionLog).toHaveLength(7);
+    expect(state.players[2].hand).toHaveLength(13);
+    expect(state.players[3].hand).toHaveLength(14); // auto-drawn
+    expect(state.actionLog).toHaveLength(4);
   });
 
-  it('Step 8: player 3 discards last drawn tile → AWAITING', () => {
+  it('Step 5: player 3 discards fodder → auto-draw 四万 for player 0 → TURN', () => {
     const tileToDiscard = state.players[3].hand[state.players[3].hand.length - 1];
     state = transition(state, { type: 'discard', tileId: tileToDiscard.id });
 
-    expect(state.phase).toBe('AWAITING');
-    expect(state.players[3].hand).toHaveLength(13);
-    expect(state.actionLog).toHaveLength(8);
-  });
-
-  it('Step 9: pass → player 0 draws 四万 (winning tile) → TURN', () => {
-    state = transition(state, { type: 'pass' });
-
+    // No one can act on fodder, so auto-draw for player 0 → TURN
     expect(state.phase).toBe('TURN');
     expect(state.currentPlayerIndex).toBe(0);
-    expect(state.players[0].hand).toHaveLength(14);
+    expect(state.players[3].hand).toHaveLength(13);
+    expect(state.players[0].hand).toHaveLength(14); // auto-drawn winning tile
+    expect(state.actionLog).toHaveLength(5);
+  });
 
+  it('Step 6: player 0 declares hu (zi mo) → WIN with correct scores', () => {
     // Verify player 0 now has 3x 四万 (2 original + 1 drawn)
     const siWanCount = state.players[0].hand.filter(
       (t) => t.suit === TileSuit.WAN && t.value === 4,
     ).length;
     expect(siWanCount).toBe(3);
-  });
 
-  it('Step 10: player 0 declares hu (zi mo) → WIN with correct scores', () => {
     // Verify hu is a valid action
     const validActions = getValidActions(state);
     const hasHu = validActions.some((a) => a.type === 'hu');
@@ -308,9 +286,9 @@ describe('Integration: 摸-打-自摸 complete game flow', () => {
   });
 
   it('Action log records all operations in order', () => {
-    // The log should have entries for: deal, discard, pass, discard, pass,
-    // discard, pass, discard, pass, hu
-    expect(state.actionLog.length).toBeGreaterThanOrEqual(10);
+    // The log should have entries for: deal, discard, discard, discard, discard, hu
+    // (6 entries: no pass actions since auto-draw skips AWAITING)
+    expect(state.actionLog.length).toBe(6);
 
     // Verify timestamps are non-decreasing
     for (let i = 1; i < state.actionLog.length; i++) {

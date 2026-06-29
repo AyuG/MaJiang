@@ -208,6 +208,11 @@ export class RoomManager {
     }
   }
 
+  /** Get all rooms for lobby list */
+  getAllRooms(): RoomState[] {
+    return Array.from(this.rooms.values());
+  }
+
   /** Remove disconnected player from room after timeout */
   removeDisconnectedPlayer(roomId: string, playerId: string): void {
     const room = this.rooms.get(roomId);
@@ -242,17 +247,21 @@ export class RoomManager {
   /**
    * Roll dice for all 4 players. Highest unique roll becomes dealer.
    * If there's a tie for highest, those players re-roll until a unique winner.
+   * Maximum 9 rounds of re-rolls to prevent infinite loops.
    */
   rollDice(roomId: string): DiceResult {
     const room = this.rooms.get(roomId);
     if (!room) throw new Error(`Room ${roomId} not found`);
     if (room.players.length !== 4) throw new Error('Need exactly 4 players');
 
+    const MAX_ROUNDS = 9;
+
     // Initial roll for all 4 players
     let candidateIndices = [0, 1, 2, 3];
     const finalRolls = [0, 0, 0, 0];
+    let round = 0;
 
-    while (candidateIndices.length > 1) {
+    while (candidateIndices.length > 1 && round < MAX_ROUNDS) {
       const rolls: { index: number; value: number }[] = candidateIndices.map((i) => ({
         index: i,
         value: Math.floor(this.randomFn() * 6) + 1,
@@ -275,9 +284,10 @@ export class RoomManager {
 
       // Tie — re-roll among tied players only
       candidateIndices = maxRollers.map((r) => r.index);
+      round++;
     }
 
-    // Only one candidate left (shouldn't normally reach here, but handle it)
+    // Fallback: if we hit max rounds or only one candidate, pick the first candidate
     const dealerIndex = candidateIndices[0];
     room.dealerIndex = dealerIndex;
     return { rolls: finalRolls, dealerIndex };

@@ -23,6 +23,7 @@ function makeGameState(overrides?: Partial<GameState>): GameState {
     dealerFirstDiscard: null,
     dealerFirstMatchCount: 0,
     timeoutAutoPlayerIds: [],
+    consecutiveAutoPlayCount: 0,
     ...overrides,
   };
 }

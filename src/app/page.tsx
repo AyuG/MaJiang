@@ -9,7 +9,8 @@ import { ActionBar } from '@/components/ActionBar';
 import { Lobby } from '@/components/Lobby';
 import { PauseOverlay } from '@/components/PauseOverlay';
 import { ScorePanel } from '@/components/ScorePanel';
-import type { RoomSyncData } from '@/types';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import type { RoomSyncData, RoomListItem } from '@/types';
 
 const NICKNAME_STORAGE_KEY = 'mj_nicknames';
 
@@ -69,6 +70,7 @@ export default function Home() {
   const [voteInitiator, setVoteInitiator] = useState<string | null>(null);
   const [roomError, setRoomError] = useState<string | null>(null);
   const [showScores, setShowScores] = useState(false);
+  const [roomList, setRoomList] = useState<RoomListItem[]>([]);
 
   // Auto-join from invite link (?room=XXXXXX)
   useEffect(() => {
@@ -113,6 +115,9 @@ export default function Home() {
     const onNewGameCreated = (newRoomId: string) => {
       setLocalRoomId(newRoomId);
     };
+    const onRoomList = (list: RoomListItem[]) => {
+      setRoomList(list);
+    };
 
     socket.on('room:created', onCreated);
     socket.on('room:sync', onSync);
@@ -122,6 +127,7 @@ export default function Home() {
     socket.on('room:error', onRoomError);
     socket.on('room:vote-dissolve-rejected', onVoteRejected);
     socket.on('room:new-game-created', onNewGameCreated);
+    socket.on('room:list', onRoomList);
 
     return () => {
       socket.off('room:created', onCreated);
@@ -132,6 +138,7 @@ export default function Home() {
       socket.off('room:error', onRoomError);
       socket.off('room:vote-dissolve-rejected', onVoteRejected);
       socket.off('room:new-game-created', onNewGameCreated);
+      socket.off('room:list', onRoomList);
     };
   }, [socket]);
 
@@ -182,7 +189,7 @@ export default function Home() {
     const winner = gameState.phase === 'WIN'
       ? players.reduce((best, p) => (p.score > best.score ? p : best), players[0])
       : null;
-    
+
     const getPlayerDisplayName = (playerId: string) => {
       if (playerId === myPlayerId) return '你';
       const player = roomSync?.players.find(p => p.id === playerId);
@@ -191,6 +198,7 @@ export default function Home() {
 
     return (
       <main>
+        <ThemeToggle />
         <div className="lobby">
           {gameState.phase === 'WIN' && (
             <>
@@ -223,6 +231,7 @@ export default function Home() {
   if (inGame && gameState) {
     return (
       <main>
+        <ThemeToggle />
         <GameBoard
           gameState={gameState}
           myPlayerId={myPlayerId}
@@ -269,6 +278,7 @@ export default function Home() {
   // --- LOBBY view ---
   return (
     <main>
+      <ThemeToggle />
       <Lobby
         isConnected={isConnected}
         roomId={effectiveRoomId}
@@ -287,6 +297,7 @@ export default function Home() {
         onLeaveRoom={handleLeaveRoom}
         onChangeNickname={changeNickname}
         onShowScores={() => setShowScores(true)}
+        roomList={roomList}
       />
       {diceResult && !gameState && (
         <div className="dice-overlay">

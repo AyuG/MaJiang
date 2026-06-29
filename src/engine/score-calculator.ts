@@ -77,10 +77,9 @@ export function settleWin(
 
 /**
  * Settle a draw (流局): clear all gang records, no score changes.
- * Mutates the gangRecords array to empty (atomic clear).
- * Returns empty ScoreChange[].
+ * Returns a new empty gang records array instead of mutating the input.
+ * Returns empty score changes and a fresh empty gang-record list.
  */
-export function settleDraw(gangRecords: GangRecord[]): ScoreChange[] {
-  gangRecords.length = 0;
-  return [];
+export function settleDraw(_gangRecords: GangRecord[]): { scoreChanges: ScoreChange[]; clearedRecords: GangRecord[] } {
+  return { scoreChanges: [], clearedRecords: [] };
 }

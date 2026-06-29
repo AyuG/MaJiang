@@ -176,38 +176,23 @@ describe('Property 16: 投票解散逻辑', () => {
           // p0 initiates (auto-agrees)
           mgr.initiateVoteDissolve(roomId, 'p0');
 
-          // Count expected agrees: p0 always true + others
-          const agreeCount = 1 + otherVotes.filter((v) => v).length;
-
-          // Vote one by one, collecting the last result
+          // Vote one by one until the vote is rejected or all players agree.
           let lastResult = mgr.voteDissolve(roomId, 'p1', otherVotes[0]);
 
-          // Early termination may have already resolved the vote
-          if (!lastResult.dissolved) {
-            // Check if vote is still active before continuing
-            try {
-              lastResult = mgr.voteDissolve(roomId, 'p2', otherVotes[1]);
-            } catch {
-              // Vote already resolved (impossible to reach 3)
-              expect(agreeCount).toBeLessThan(3);
-              return;
-            }
-          }
-
-          if (!lastResult.dissolved) {
-            try {
-              lastResult = mgr.voteDissolve(roomId, 'p3', otherVotes[2]);
-            } catch {
-              expect(agreeCount).toBeLessThan(3);
-              return;
-            }
-          }
-
-          if (agreeCount >= 3) {
-            expect(lastResult.dissolved).toBe(true);
-          } else {
+          if (otherVotes[0] === false) {
             expect(lastResult.dissolved).toBe(false);
+            return;
           }
+
+          lastResult = mgr.voteDissolve(roomId, 'p2', otherVotes[1]);
+
+          if (otherVotes[1] === false) {
+            expect(lastResult.dissolved).toBe(false);
+            return;
+          }
+
+          lastResult = mgr.voteDissolve(roomId, 'p3', otherVotes[2]);
+          expect(lastResult.dissolved).toBe(otherVotes[2]);
         },
       ),
       { numRuns: 100 },
@@ -232,7 +217,11 @@ describe('Property 16: 投票解散逻辑', () => {
           // Only some players vote (at most 1 to avoid early resolution)
           const voters = ['p1'].slice(0, voterCount);
           for (const voter of voters) {
-            mgr.voteDissolve(roomId, voter, voteValue);
+            const result = mgr.voteDissolve(roomId, voter, voteValue);
+            if (!voteValue) {
+              expect(result.dissolved).toBe(false);
+              return;
+            }
           }
 
           // Resolve after timeout — unvoted = disagree

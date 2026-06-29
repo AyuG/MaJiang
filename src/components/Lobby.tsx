@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { RoomSyncData } from '@/types';
+import type { RoomSyncData, RoomListItem } from '@/types';
 
 interface LobbyProps {
   isConnected: boolean;
@@ -20,6 +20,7 @@ interface LobbyProps {
   onStart: () => void;
   onLeaveRoom: () => void;
   onShowScores?: () => void;
+  roomList?: RoomListItem[];
 }
 
 const SEAT_LABELS: Record<string, string> = {
@@ -29,7 +30,7 @@ const SEAT_LABELS: Record<string, string> = {
 export function Lobby({
   isConnected, roomId, roomSync, myId, myNickname, roomError,
   onCreateRoom, onJoinRoom, onReady, onUnready, onKick, onSetRole, onDissolve, onStart, onLeaveRoom,
-  onChangeNickname, onShowScores,
+  onChangeNickname, onShowScores, roomList = [],
 }: LobbyProps & { onChangeNickname?: (name: string) => void }) {
   const [inputRoomId, setInputRoomId] = useState('');
   const [copied, setCopied] = useState(false);
@@ -110,6 +111,31 @@ export function Lobby({
               disabled={!isConnected || !isValidRoomId}>加入房间</button>
           </div>
           {roomError && <div style={{ color: '#ff6b6b', fontSize: '0.9rem', marginTop: '0.5rem' }}>⚠ {roomError}</div>}
+
+          {/* Room list */}
+          {roomList.length > 0 && (
+            <div className="room-list-container">
+              <div className="room-list-title">房间列表</div>
+              <div className="room-list">
+                {roomList.map((room) => (
+                  <div key={room.roomId} className="room-list-item">
+                    <span className="room-list-id">{room.roomId}</span>
+                    <span className="room-list-count">{room.playerCount}/4</span>
+                    <span className={`room-list-status status-${room.status}`}>
+                      {room.status === 'waiting' ? '等待中' : room.status === 'playing' ? '游戏中' : '已结束'}
+                    </span>
+                    <button
+                      className="room-list-join-btn"
+                      onClick={() => onJoinRoom(room.roomId)}
+                      disabled={!isConnected || room.status !== 'waiting' || room.playerCount >= 4}
+                    >
+                      加入
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="room-info">

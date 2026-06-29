@@ -16,18 +16,15 @@ function generateNickname(): string {
 
 /**
  * Get or create persistent player identity (ID + nickname).
- * Stored in localStorage, survives refresh/reconnect.
+ * ID is now server-generated, but we keep the last known ID in localStorage for reconnection.
+ * Nickname is stored locally and sent to server on connect.
  */
-function getPlayerIdentity(): { playerId: string; nickname: string } {
-  if (typeof window === 'undefined') return { playerId: '', nickname: '' };
+function getPlayerIdentity(): { playerId: string | null; nickname: string } {
+  if (typeof window === 'undefined') return { playerId: null, nickname: '' };
 
-  let playerId = localStorage.getItem('mj_player_id');
+  const playerId = localStorage.getItem('mj_player_id');
   let nickname = localStorage.getItem('mj_nickname');
 
-  if (!playerId) {
-    playerId = 'p_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-    localStorage.setItem('mj_player_id', playerId);
-  }
   if (!nickname) {
     nickname = generateNickname();
     localStorage.setItem('mj_nickname', nickname);
@@ -36,24 +33,27 @@ function getPlayerIdentity(): { playerId: string; nickname: string } {
   return { playerId, nickname };
 }
 
-let globalSocket: Socket<ServerEvents, ClientEvents> | null = null;
-
-function getIdentity(): { playerId: string; nickname: string } {
-  if (typeof window === 'undefined') return { playerId: '', nickname: '' };
-  return getPlayerIdentity();
+/**
+ * Save the server-generated player ID to localStorage.
+ */
+function savePlayerId(playerId: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('mj_player_id', playerId);
 }
+
+let globalSocket: Socket<ServerEvents, ClientEvents> | null = null;
 
 function getSocket(): Socket<ServerEvents, ClientEvents> {
   if (!globalSocket && typeof window !== 'undefined') {
-    const identity = getIdentity();
+    const identity = getPlayerIdentity();
     globalSocket = io(window.location.origin, {
-      autoConnect: true,
+      autoConnect: false,
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       transports: ['websocket', 'polling'],
       auth: {
-        playerId: identity.playerId,
+        playerId: identity.playerId ?? undefined, // Send existing ID if we have one
         nickname: identity.nickname,
       },
     });
@@ -64,9 +64,14 @@ function getSocket(): Socket<ServerEvents, ClientEvents> {
 export function useSocket() {
   const [isConnected, setIsConnected] = useState(false);
   const [socket, setSocket] = useState<Socket<ServerEvents, ClientEvents> | null>(null);
-  const identity = typeof window !== 'undefined' ? getIdentity() : { playerId: '', nickname: '' };
+  const [playerId, setPlayerId] = useState<string>('');
+  const [nickname, setNickname] = useState<string>('');
 
   useEffect(() => {
+    const identity = getPlayerIdentity();
+    setPlayerId(identity.playerId ?? '');
+    setNickname(identity.nickname);
+
     const s = getSocket();
     setSocket(s);
     setIsConnected(s.connected);
@@ -74,19 +79,31 @@ export function useSocket() {
     const onConnect = () => setIsConnected(true);
     const onDisconnect = () => setIsConnected(false);
 
+    // Handle server-sent player identity
+    const onIdentity = (data: { playerId: string; nickname: string }) => {
+      setPlayerId(data.playerId);
+      setNickname(data.nickname);
+      savePlayerId(data.playerId);
+      // Also save nickname in case server returned a different one
+      localStorage.setItem('mj_nickname', data.nickname);
+    };
+
     s.on('connect', onConnect);
     s.on('disconnect', onDisconnect);
+    s.on('player:identity', onIdentity);
+    if (!s.connected) s.connect();
 
     return () => {
       s.off('connect', onConnect);
       s.off('disconnect', onDisconnect);
+      s.off('player:identity', onIdentity);
     };
   }, []);
 
   return {
     socket,
     isConnected,
-    playerId: identity.playerId,
-    nickname: identity.nickname,
+    playerId,
+    nickname,
   };
 }
