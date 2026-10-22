@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import Redis from 'ioredis';
 
@@ -12,19 +12,29 @@ export class IsolatedRedis {
   process?: ChildProcess;
   clients: Redis[] = [];
 
-  async start(): Promise<void> {
+  /** Prepare a fresh directory/config without starting Redis (for cold restores). */
+  async prepare(): Promise<void> {
     if (!this.directory) {
       // Keep the Unix socket pathname short enough for macOS.
       this.directory = await mkdtemp('/tmp/mjr-');
       this.socket = join(this.directory, 'redis.sock');
+      await writeFile(join(this.directory, 'redis.conf'), [
+        'port 0', `unixsocket ${this.socket}`, 'unixsocketperm 700',
+        `dir ${this.directory}`,
+        ...(this.persistence === 'aof'
+          ? ['save ""', 'appendonly yes', 'appendfsync always']
+          : ['appendonly no']),
+        '',
+      ].join('\n'));
     }
+  }
+
+  async start(): Promise<void> {
+    await this.prepare();
     const binary = process.env.MJ_REDIS_SERVER;
     if (!binary) throw new Error('Set MJ_REDIS_SERVER to a local redis-server executable; no external Redis is used');
-    const server = spawn(binary, [
-      '--port', '0', '--unixsocket', this.socket, '--unixsocketperm', '700',
-      '--dir', this.directory,
-      ...(this.persistence === 'aof' ? ['--save', '', '--appendonly', 'yes', '--appendfsync', 'always'] : ['--appendonly', 'no']),
-    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    // Reuse the file on restart so CONFIG REWRITE is actually exercised.
+    const server = spawn(binary, [join(this.directory, 'redis.conf')], { stdio: ['ignore', 'pipe', 'pipe'] });
     this.process = server;
     await new Promise<void>((resolve, reject) => {
       let output = '';
