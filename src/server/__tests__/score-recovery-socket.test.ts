@@ -3,6 +3,8 @@ import { createServer } from 'node:http';
 import { Server } from 'socket.io';
 import { io, type Socket } from 'socket.io-client';
 import RedisMock from 'ioredis-mock';
+import type Redis from 'ioredis';
+import { IsolatedRedis } from '@/server/__tests__/helpers/isolated-redis';
 import { RoomManager } from '@/server/room-manager';
 import { GameController } from '@/server/game-controller';
 import { RedisStore } from '@/store/redis-store';
@@ -12,7 +14,8 @@ import type { ClientEvents, ServerEvents, ClientGameState, ScoreHistoryEntry } f
 let http: ReturnType<typeof createServer>;
 let server: Server<ClientEvents, ServerEvents>;
 let client: Socket<ServerEvents, ClientEvents>;
-let redis: InstanceType<typeof RedisMock>;
+let redis: InstanceType<typeof RedisMock> | Redis;
+let isolated: IsolatedRedis | undefined;
 let store: RedisStore;
 let rooms: RoomManager;
 let controller: GameController;
@@ -24,7 +27,13 @@ function next<T>(event: string): Promise<T> {
 }
 
 beforeEach(async () => {
-  redis = new RedisMock();
+  if (process.env.MJ_REDIS_SERVER) {
+    isolated = new IsolatedRedis();
+    await isolated.start();
+    redis = isolated.client();
+  } else {
+    redis = new RedisMock();
+  }
   await redis.flushall();
   store = new RedisStore(redis as unknown as ConstructorParameters<typeof RedisStore>[0]);
   rooms = new RoomManager();
@@ -50,6 +59,8 @@ afterEach(async () => {
   }
   await new Promise<void>((resolve) => server.close(() => resolve()));
   redis.disconnect();
+  await isolated?.cleanup();
+  isolated = undefined;
 });
 
 async function connect(id: string) {

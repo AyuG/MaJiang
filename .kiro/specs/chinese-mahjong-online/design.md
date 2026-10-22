@@ -602,6 +602,11 @@ interface ActionLogEntry {
 
 GameState.roundStartScores 按玩家 ID 保存本局开始前累计分，并随 Redis 快照及 ClientGameState 同步。历史 delta = 结束累计分 - roundStartScores；total 为结束累计分。新房间首局为零，同房间下一局继承累计分。替补继承座位累计分和基线，同时更新副子来源 ID，避免补杠漏计付款方。
 
-终局状态保存后立即写入日志，不等待 5 秒展示期。Redis 原子检查同一房间局号，重复相同记录不追加，冲突记录报错。局号取自持久化状态；恢复终局时补写日志。客户端依据服务器基线计算分差并按房间、局号去重，WIN 的 currentPlayerIndex 是胜者。
+终局快照与日志在同一个 Redis Lua 操作中提交，不等待 5 秒展示期。起始快照、房间信息和可恢复登记也在同一操作中提交。Redis 原子检查同一房间局号，重复相同记录不追加，冲突记录报错。局号取自持久化状态；恢复终局时补写日志。客户端依据服务器基线计算分差并按房间、局号去重，WIN 的 currentPlayerIndex 是胜者。
 
 首牌判定依据 actionLog 中每位玩家首次 discard，不能依赖可能被碰杠移除的 discardPool，也不能累加同一玩家后续弃牌。罚分立即生效，DRAW 仅清除待结算 gangRecords。
+
+
+同房间的动作、超时、断线、重连、替补、续局及关闭共用顺序队列，socket 层不再自行写回旧快照。超时回调携带调度时的 roundNumber、turnCount，连同玩家和阶段一起核验；过期回调不推进状态。进程恢复时将旧连接置为离线，积分和基线不变。关闭前补齐可验证的终局日志，失败保留恢复登记。
+
+原子写入不等同于磁盘耐久性。真实 Redis 故障验证及默认 RDB 的风险见 docs/redis-score-verification.md；部署持久化迁移需另行审批。

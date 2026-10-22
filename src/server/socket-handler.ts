@@ -76,9 +76,9 @@ export function setupSocketHandlers(
   }
 
   // Create TurnTimer with callback that uses broadcastGameState
-  const turnTimer = new TurnTimer(async (roomId, playerId, phase) => {
+  const turnTimer = new TurnTimer(async (roomId, playerId, phase, expected) => {
     try {
-      const state = await gameController.handleTimeout(roomId, playerId, phase);
+      const state = await gameController.handleTimeout(roomId, playerId, phase, expected);
       await broadcastGameState(io, socketMap, roomId, state, turnTimer, handleRoundEnd, handleAutoPlay);
     } catch (err) {
       logger.error('TurnTimer', 'Timeout handling failed', err);
@@ -86,9 +86,9 @@ export function setupSocketHandlers(
   });
 
   /** Auto-play for disconnected/timeout players — called from broadcastGameState */
-  async function handleAutoPlay(roomId: string, playerId: string, phase: GameState['phase']) {
+  async function handleAutoPlay(roomId: string, playerId: string, phase: GameState['phase'], expected?: Pick<GameState, 'roundNumber' | 'turnCount'>) {
     try {
-      const autoState = await gameController.handleTimeout(roomId, playerId, phase);
+      const autoState = await gameController.handleTimeout(roomId, playerId, phase, expected);
       await broadcastGameState(io, socketMap, roomId, autoState, turnTimer, handleRoundEnd, handleAutoPlay);
     } catch (err) {
       logger.error('handleAutoPlay', 'Auto-play failed', err);
@@ -117,6 +117,7 @@ export function setupSocketHandlers(
       }
     }
 
+    await gameController.closeRoom(roomId);
     let scoreHistory: ScoreHistoryEntry[] = [];
     try {
       scoreHistory = await getScoreHistory(roomId);
@@ -125,9 +126,6 @@ export function setupSocketHandlers(
     }
 
     const history = scoreHistory.length > 0 ? scoreHistory : undefined;
-    await gameController['redisStore'].deactivateRoom(roomId);
-    const oldRoom = roomManager.getRoom(roomId);
-    if (oldRoom) roomManager.dissolveRoom(roomId, oldRoom.ownerId);
 
     // Check if this dissolve should create a new game
     const newGamePlayers = pendingNewGameRooms.get(roomId);
@@ -195,7 +193,7 @@ export function setupSocketHandlers(
           if (turnTimer && newState.phase === 'TURN') {
             const currentPlayer = newState.players[newState.currentPlayerIndex];
             if (currentPlayer) {
-              turnTimer.startTurnTimer(roomId, currentPlayer.id);
+              turnTimer.startTurnTimer(roomId, currentPlayer.id, 30_000, newState);
             }
           }
         } else {
@@ -336,20 +334,11 @@ export function setupSocketHandlers(
         const ownSeat = room.players.find((p) => p.id === playerId);
         if (ownSeat) {
           // True reconnect — same persistent ID
-          ownSeat.isConnected = true;
           socketMap.set(socket.id, { roomId, playerId });
           socket.join(roomId);
 
           try {
-            const state = await gameController.handleReconnect(roomId, playerId);
-            const patchedState: GameState = {
-              ...state,
-              players: state.players.map((p) =>
-                p.id === playerId ? { ...p, isConnected: true } : p,
-              ),
-              timeoutAutoPlayerIds: (state.timeoutAutoPlayerIds ?? []).filter((id) => id !== playerId),
-            };
-            await gameController['redisStore'].saveGameState(roomId, patchedState);
+            const patchedState = await gameController.handleReconnect(roomId, playerId);
             socket.emit('game:score-history', { roomId, scoreHistory: await getScoreHistory(roomId) });
             socket.emit('game:started', toClientState(patchedState, playerId));
             await broadcastGameState(io, socketMap, roomId, patchedState, turnTimer, handleRoundEnd, handleAutoPlay);
@@ -366,40 +355,12 @@ export function setupSocketHandlers(
           return;
         }
 
-        const existingState = await gameController['redisStore'].getGameState(roomId);
-        if (existingState?.phase === 'WIN' || existingState?.phase === 'DRAW') {
-          socket.emit('room:error', '本局已结束，请等待下一局再加入');
-          return;
-        }
         const oldPlayerId = disconnectedPlayer.id;
-        roomManager.replacePlayer(roomId, disconnectedPlayer.id, playerId);
-
-        socketMap.set(socket.id, { roomId, playerId });
-        socket.join(roomId);
-
-        // Update game state: replace old player ID with new one
         try {
-          const state = await gameController.handleReconnect(roomId, oldPlayerId);
-          // Patch the player ID in the game state
-          const patchedState: GameState = {
-            ...state,
-            players: state.players.map((p) =>
-              p.id === oldPlayerId ? { ...p, id: playerId, isConnected: true } : p,
-            ),
-            timeoutAutoPlayerIds: (state.timeoutAutoPlayerIds ?? []).filter((id) => id !== oldPlayerId),
-          };
-          // A substitute inherits this seat's cumulative score and round baseline.
-          if (patchedState.roundStartScores) {
-            patchedState.roundStartScores = { ...patchedState.roundStartScores,
-              [playerId]: patchedState.roundStartScores[oldPlayerId] };
-            delete patchedState.roundStartScores[oldPlayerId];
-          }
-          patchedState.players = patchedState.players.map((p) => ({ ...p,
-            melds: p.melds.map((meld) => meld.fromPlayer === oldPlayerId
-              ? { ...meld, fromPlayer: playerId } : meld),
-          }));
-          // Fix lastDiscard playerIndex reference if needed (index-based, no ID change needed)
-          await gameController['redisStore'].saveGameState(roomId, patchedState);
+          // Validate the seat and transfer identity/baseline inside the room queue.
+          const patchedState = await gameController.handleReconnect(roomId, oldPlayerId, playerId);
+          socketMap.set(socket.id, { roomId, playerId });
+          socket.join(roomId);
 
           // Send current game state and missed score history to the substitute
           socket.emit('game:score-history', { roomId, scoreHistory: await getScoreHistory(roomId) });
@@ -408,6 +369,7 @@ export function setupSocketHandlers(
           await broadcastGameState(io, socketMap, roomId, patchedState, turnTimer, handleRoundEnd, handleAutoPlay);
         } catch (err) {
           logger.error('room:join', 'Substitute reconnect failed', err);
+          socket.emit('room:error', '座位已变化或本局已结束，请重试');
         }
         return;
       }
@@ -507,11 +469,16 @@ export function setupSocketHandlers(
             if (turnTimer && state.phase === 'TURN') {
               const currentPlayer = state.players[state.currentPlayerIndex];
               if (currentPlayer) {
-                turnTimer.startTurnTimer(roomId, currentPlayer.id);
+                turnTimer.startTurnTimer(roomId, currentPlayer.id, 30_000, state);
               }
             }
           } catch (err) {
             logger.error('room:start', 'Failed to start game after dice', err);
+            // A failed initial commit leaves the waiting room available for retry.
+            try {
+              if (!await gameController['redisStore'].getGameState(roomId)) room.status = 'waiting';
+            } catch { /* Redis may still be unavailable; reconnect/recovery will retry. */ }
+            socket.emit('room:error', '开局保存失败，请重试');
           }
         }, 3000);
       } catch (err) {
@@ -567,7 +534,7 @@ export function setupSocketHandlers(
       if (!mapping) return;
       const { roomId, playerId } = mapping;
       try {
-        roomManager.dissolveRoom(roomId, playerId);
+        if (roomManager.getRoom(roomId)?.ownerId !== playerId) throw new Error('Only the room owner can dissolve');
         await dissolveWithScores(roomId);
       } catch (err) {
         logger.warn('room:dissolve', 'Dissolve failed (not owner)', err);
@@ -739,11 +706,11 @@ export function setupSocketHandlers(
           const state = await gameController.handleDisconnect(roomId, playerId);
           // If it's the disconnected player's turn, auto-play immediately
           if (state.phase === 'TURN' && state.players[state.currentPlayerIndex]?.id === playerId) {
-            const autoState = await gameController.handleTimeout(roomId, playerId, 'TURN');
+            const autoState = await gameController.handleTimeout(roomId, playerId, 'TURN', state);
             await broadcastGameState(io, socketMap, roomId, autoState, turnTimer, handleRoundEnd, handleAutoPlay);
           } else if (state.phase === 'AWAITING') {
             // Auto-pass for disconnected player
-            const autoState = await gameController.handleTimeout(roomId, playerId, 'AWAITING');
+            const autoState = await gameController.handleTimeout(roomId, playerId, 'AWAITING', state);
             await broadcastGameState(io, socketMap, roomId, autoState, turnTimer, handleRoundEnd, handleAutoPlay);
           } else {
             // Not their turn — just broadcast the disconnect status
@@ -764,7 +731,7 @@ async function broadcastGameState(
   state: GameState,
   turnTimer?: TurnTimer,
   onRoundEnd?: (roomId: string, state: GameState) => void,
-  onAutoPlay?: (roomId: string, playerId: string, phase: GameState['phase']) => Promise<void>,
+  onAutoPlay?: (roomId: string, playerId: string, phase: GameState['phase'], expected?: Pick<GameState, 'roundNumber' | 'turnCount'>) => Promise<void>,
 ): Promise<void> {
   const MAX_CONSECUTIVE_AUTO_PLAYS = 10;
 
@@ -794,7 +761,7 @@ async function broadcastGameState(
 
         if (onAutoPlay) {
           // Small delay to avoid synchronous recursion
-          setTimeout(() => onAutoPlay(roomId, currentPlayer.id, 'TURN'), 100);
+          setTimeout(() => onAutoPlay(roomId, currentPlayer.id, 'TURN', state), 100);
         }
       } else if ((state.timeoutAutoPlayerIds ?? []).includes(currentPlayer.id)) {
         // Timeout-auto player: also auto-play immediately
@@ -807,11 +774,11 @@ async function broadcastGameState(
         }
 
         if (onAutoPlay) {
-          setTimeout(() => onAutoPlay(roomId, currentPlayer.id, 'TURN'), 100);
+          setTimeout(() => onAutoPlay(roomId, currentPlayer.id, 'TURN', state), 100);
         }
       } else {
         // Normal player: start timer, auto-play counter remains as-is
-        if (turnTimer) turnTimer.startTurnTimer(roomId, currentPlayer.id);
+        if (turnTimer) turnTimer.startTurnTimer(roomId, currentPlayer.id, 30_000, state);
       }
     }
   } else if (state.phase === 'AWAITING') {
@@ -835,9 +802,9 @@ async function broadcastGameState(
     if (disconnectedResponderId && onAutoPlay) {
       // Disconnected player can respond → auto-pass immediately
       if (turnTimer) turnTimer.clear(roomId);
-      setTimeout(() => onAutoPlay(roomId, disconnectedResponderId, 'AWAITING'), 100);
+      setTimeout(() => onAutoPlay(roomId, disconnectedResponderId, 'AWAITING', state), 100);
     } else if (turnTimer) {
-      turnTimer.startAwaitingTimer(roomId, '');
+      turnTimer.startAwaitingTimer(roomId, '', 15_000, state);
     }
   } else if (state.phase === 'WIN' || state.phase === 'DRAW') {
     // Auto-play counter will be reset in next round's GameState

@@ -101,7 +101,7 @@ describe('persisted round score history', () => {
     await recoverActiveGames(store, recoveredRooms);
     expect(recoveredRooms.getRoom(roomId)?.status).toBe('playing');
     controller = new GameController(recoveredRooms, store);
-    await controller.handleDisconnect(roomId, 'p2');
+    for (const id of ['p0', 'p1', 'p3']) await controller.handleReconnect(roomId, id);
     const reconnected = await controller.handleReconnect(roomId, 'p2');
     expect(toClientState(reconnected, 'p2').roundStartScores).toEqual(second.roundStartScores);
     const result = await controller.finalizeRound(roomId, penalized, 2);
