@@ -116,6 +116,11 @@ export class RedisStore {
     return this.client.smembers(ACTIVE_ROOMS_KEY);
   }
 
+  /** Stop recovering a dissolved room while retaining its score history. */
+  async deactivateRoom(roomId: string): Promise<void> {
+    await this.client.srem(ACTIVE_ROOMS_KEY, roomId);
+  }
+
   // ── Score Log (per room) ───────────────────────────────
 
   /**
@@ -133,8 +138,30 @@ export class RedisStore {
     },
   ): Promise<void> {
     const key = `score:${roomId}`;
-    await this.client.rpush(key, JSON.stringify(record));
-    await this.client.expire(key, LOG_TTL_SECONDS);
+    // Compare-and-append atomically; retries never duplicate or overwrite a round.
+    // Compare the list tail too, so expiration / replacement cannot pass a stale check.
+    for (;;) {
+      const raw = await this.client.lrange(key, 0, -1);
+      const existing = raw.map((entry) => JSON.parse(entry) as typeof record)
+        .find((entry) => entry.round === record.round);
+      if (existing) {
+        if (existing.result !== record.result || existing.winnerId !== record.winnerId ||
+            JSON.stringify(existing.scores) !== JSON.stringify(record.scores)) {
+          throw new Error('Conflicting score record');
+        }
+        return;
+      }
+      const appended = await this.client.eval(`
+        if redis.call('LLEN', KEYS[1]) ~= tonumber(ARGV[1]) or
+            (redis.call('LINDEX', KEYS[1], -1) or '') ~= ARGV[2] then
+          return 0
+        end
+        redis.call('RPUSH', KEYS[1], ARGV[3])
+        redis.call('EXPIRE', KEYS[1], ARGV[4])
+        return 1
+      `, 1, key, raw.length, raw.at(-1) ?? '', JSON.stringify(record), LOG_TTL_SECONDS);
+      if (appended === 1) return;
+    }
   }
 
   /**

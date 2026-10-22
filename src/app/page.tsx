@@ -187,7 +187,7 @@ export default function Home() {
   if (gameOver && gameState) {
     const players = gameState.players;
     const winner = gameState.phase === 'WIN'
-      ? players.reduce((best, p) => (p.score > best.score ? p : best), players[0])
+      ? players[gameState.currentPlayerIndex]
       : null;
 
     const getPlayerDisplayName = (playerId: string) => {
@@ -218,7 +218,7 @@ export default function Home() {
           {gameState.phase === 'DRAW' && (
             <>
               <h2>流局</h2>
-              <div>本局不计分</div>
+              <div>本局杠分不结算，已生效的首牌罚分保留</div>
             </>
           )}
         </div>

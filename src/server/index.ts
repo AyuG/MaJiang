@@ -88,7 +88,16 @@ app.prepare().then(async () => {
   setupSocketHandlers(io, gameController, roomManager);
 
   // Recover active games on startup
-  await recoverActiveGames(redisStore, roomManager);
+  const recovered = await recoverActiveGames(redisStore, roomManager);
+  for (const state of recovered) {
+    if (state.phase === 'WIN' || state.phase === 'DRAW') {
+      try {
+        await gameController.recordRoundResult(state.roomId, state);
+      } catch (err) {
+        logger.error('Recovery', `Cannot record round ${state.roundNumber} in ${state.roomId}`, err);
+      }
+    }
+  }
 
   httpServer.listen(port, hostname, () => {
     logger.info('Server', `Server ready on http://${hostname}:${port}`);

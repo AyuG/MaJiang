@@ -1,6 +1,6 @@
 import type { Server, Socket } from 'socket.io';
 import { randomUUID } from 'node:crypto';
-import type { ClientEvents, ServerEvents, ClientGameState, RoomSyncData, SocketAuth } from '@/types';
+import type { ClientEvents, ServerEvents, ClientGameState, RoomSyncData, SocketAuth, ScoreHistoryEntry } from '@/types';
 import type { GameState } from '@/types';
 import type { GameController } from '@/server/game-controller';
 import type { RoomManager } from '@/server/room-manager';
@@ -32,6 +32,7 @@ export function toClientState(state: GameState, playerId: string): ClientGameSta
     dealerIndex: state.dealerIndex,
     turnCount: state.turnCount,
     roundNumber: state.roundNumber ?? 1,
+    roundStartScores: state.roundStartScores,
     wallCount: state.wall.length,
     myHand,
     players: state.players.map((p) => ({
@@ -60,7 +61,7 @@ export function setupSocketHandlers(
   roomManager: RoomManager,
 ): void {
   const socketMap = new Map<string, SocketMapping>();
-  const roundCounters = new Map<string, number>();
+  const roundEndTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const pendingNewGameRooms = new Map<string, Array<{ id: string; seat: import('@/server/room-manager').SeatPosition }>>();
 
   // Broadcast room list to all connected sockets
@@ -94,10 +95,19 @@ export function setupSocketHandlers(
     }
   }
 
+  async function getScoreHistory(roomId: string): Promise<ScoreHistoryEntry[]> {
+    const log = await gameController['redisStore'].getScoreLog(roomId);
+    const seats = ['东', '南', '西', '北'];
+    return log.map((entry) => ({ ...entry,
+      scores: entry.scores.map((score, i) => ({ ...score, seat: seats[i] ?? '?' })),
+    }));
+  }
+
   /** Helper: dissolve room and emit score history */
   async function dissolveWithScores(roomId: string) {
     turnTimer.clear(roomId);
-    roundCounters.delete(roomId);
+    clearTimeout(roundEndTimers.get(roomId));
+    roundEndTimers.delete(roomId);
 
     // Capture socket mappings before clearing (needed for potential new-game creation)
     const roomSockets: Array<{ sid: string; pid: string }> = [];
@@ -107,34 +117,24 @@ export function setupSocketHandlers(
       }
     }
 
-    // Define score history type
-    interface ScoreHistoryEntry {
-      round: number;
-      result: string;
-      scores: Array<{ seat: string; delta: number }>;
-    }
-
     let scoreHistory: ScoreHistoryEntry[] = [];
     try {
-      const log = await gameController['redisStore'].getScoreLog(roomId);
-      const SEATS = ['东', '南', '西', '北'];
-      scoreHistory = log.map((entry) => ({
-        round: entry.round,
-        result: entry.result,
-        scores: entry.scores.map((s, i) => ({ seat: SEATS[i] ?? '?', delta: s.delta })),
-      }));
+      scoreHistory = await getScoreHistory(roomId);
     } catch (err) {
       logger.warn('dissolveWithScores', 'Failed to fetch score log', err);
     }
 
     const history = scoreHistory.length > 0 ? scoreHistory : undefined;
+    await gameController['redisStore'].deactivateRoom(roomId);
+    const oldRoom = roomManager.getRoom(roomId);
+    if (oldRoom) roomManager.dissolveRoom(roomId, oldRoom.ownerId);
 
     // Check if this dissolve should create a new game
     const newGamePlayers = pendingNewGameRooms.get(roomId);
     if (newGamePlayers) {
       pendingNewGameRooms.delete(roomId);
       try {
-        // Create new room BEFORE dissolving old one
+        // Create the replacement room before moving sockets
         const playersToCopy = newGamePlayers.map((p) => ({ id: p.id, seat: p.seat }));
         const newRoomId = roomManager.createRoomWithPlayers(playersToCopy);
         for (const p of playersToCopy) {
@@ -175,11 +175,10 @@ export function setupSocketHandlers(
 
   /** After broadcasting a WIN/DRAW state, schedule auto-new-round */
   async function handleRoundEnd(roomId: string, state: GameState) {
-    const round = (roundCounters.get(roomId) ?? 0) + 1;
-    roundCounters.set(roomId, round);
-
-    // Wait 5 seconds to let players see the result
-    setTimeout(async () => {
+    if (roundEndTimers.has(roomId)) return;
+    // Use the persisted round number; reconnect broadcasts must not increment it.
+    const round = state.roundNumber;
+    roundEndTimers.set(roomId, setTimeout(async () => {
       try {
         const { canContinue, newState } = await gameController.finalizeRound(roomId, state, round);
 
@@ -205,9 +204,11 @@ export function setupSocketHandlers(
         }
       } catch (err) {
         logger.error('handleRoundEnd', 'Failed to start new round', err);
-        io.to(roomId).emit('room:dissolved', { roomId });
+        io.to(roomId).emit('room:error', '积分结算失败，请保留房间并重试');
+      } finally {
+        roundEndTimers.delete(roomId);
       }
-    }, 5000);
+    }, 5000));
   }
 
   /** Broadcast room sync to all sockets in a room */
@@ -349,6 +350,7 @@ export function setupSocketHandlers(
               timeoutAutoPlayerIds: (state.timeoutAutoPlayerIds ?? []).filter((id) => id !== playerId),
             };
             await gameController['redisStore'].saveGameState(roomId, patchedState);
+            socket.emit('game:score-history', { roomId, scoreHistory: await getScoreHistory(roomId) });
             socket.emit('game:started', toClientState(patchedState, playerId));
             await broadcastGameState(io, socketMap, roomId, patchedState, turnTimer, handleRoundEnd, handleAutoPlay);
           } catch (err) {
@@ -364,6 +366,11 @@ export function setupSocketHandlers(
           return;
         }
 
+        const existingState = await gameController['redisStore'].getGameState(roomId);
+        if (existingState?.phase === 'WIN' || existingState?.phase === 'DRAW') {
+          socket.emit('room:error', '本局已结束，请等待下一局再加入');
+          return;
+        }
         const oldPlayerId = disconnectedPlayer.id;
         roomManager.replacePlayer(roomId, disconnectedPlayer.id, playerId);
 
@@ -381,10 +388,21 @@ export function setupSocketHandlers(
             ),
             timeoutAutoPlayerIds: (state.timeoutAutoPlayerIds ?? []).filter((id) => id !== oldPlayerId),
           };
+          // A substitute inherits this seat's cumulative score and round baseline.
+          if (patchedState.roundStartScores) {
+            patchedState.roundStartScores = { ...patchedState.roundStartScores,
+              [playerId]: patchedState.roundStartScores[oldPlayerId] };
+            delete patchedState.roundStartScores[oldPlayerId];
+          }
+          patchedState.players = patchedState.players.map((p) => ({ ...p,
+            melds: p.melds.map((meld) => meld.fromPlayer === oldPlayerId
+              ? { ...meld, fromPlayer: playerId } : meld),
+          }));
           // Fix lastDiscard playerIndex reference if needed (index-based, no ID change needed)
           await gameController['redisStore'].saveGameState(roomId, patchedState);
 
-          // Send current game state to the reconnected player
+          // Send current game state and missed score history to the substitute
+          socket.emit('game:score-history', { roomId, scoreHistory: await getScoreHistory(roomId) });
           socket.emit('game:started', toClientState(patchedState, playerId));
           // Broadcast updated state to all
           await broadcastGameState(io, socketMap, roomId, patchedState, turnTimer, handleRoundEnd, handleAutoPlay);
@@ -460,8 +478,12 @@ export function setupSocketHandlers(
         const room = roomManager.getRoom(roomId);
         if (!room) return;
         if (!roomManager.canStartGame(roomId, playerId)) return;
+        if (room.status !== 'waiting') return;
         if (room.players.length !== 4) return;
         if (!room.players.every((p) => p.isReady)) return;
+
+        // Reserve the start before the animation so repeated requests cannot reset scores.
+        room.status = 'playing';
 
         // Roll dice to determine dealer
         const diceResult = roomManager.rollDice(roomId);
@@ -540,21 +562,13 @@ export function setupSocketHandlers(
     });
 
     // ── Room: dissolve (owner only) ──────────────────
-    socket.on('room:dissolve', () => {
+    socket.on('room:dissolve', async () => {
       const mapping = socketMap.get(socket.id);
       if (!mapping) return;
       const { roomId, playerId } = mapping;
       try {
         roomManager.dissolveRoom(roomId, playerId);
-        io.to(roomId).emit('room:dissolved', { roomId });
-        // Clean up all socket mappings for this room
-        for (const [sid, m] of socketMap.entries()) {
-          if (m.roomId === roomId) {
-            const s = io.sockets.sockets.get(sid);
-            if (s) s.leave(roomId);
-            socketMap.delete(sid);
-          }
-        }
+        await dissolveWithScores(roomId);
       } catch (err) {
         logger.warn('room:dissolve', 'Dissolve failed (not owner)', err);
       }

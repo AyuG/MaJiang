@@ -42,7 +42,7 @@
 - **Vote dissolve**: 30s timeout. Initiator auto-agrees. Disconnected players default agree. Unvoted online players = disagree at timeout.
 - **Recovery**: On server start, `recoverActiveGames()` reads Redis `rooms:active` set, restores `RoomManager` in-memory state from persisted `GameState`.
 - **Auth**: No login. Player ID is now **server-generated** (prefix `srv_`). Client can send existing ID via Socket.IO `auth.playerId`, server returns final ID via `player:identity` event. ID stored in `localStorage` as `mj_player_id`. Nickname in `localStorage` as `mj_nickname`, passed via `auth.nickname`.
-- **Scoring/Gang records**: Accumulated during game, settled only on win. On draw (流局), gang records are cleared (zero-sum preserved).
+- **Scoring/Gang records**: Gang records are settled only on win; draw clears pending gangs only. First-discard penalties apply immediately and survive draws. Persist roundStartScores; each score-log delta is final total minus this baseline, never the cumulative score itself.
 - **Disconnected players** get auto-played (smart discard, auto-pass, auto-hu). Marked with 🤖 icon. Turn timer is not started for them — auto-play fires immediately with 100ms delay to avoid sync recursion.
 - **Auto-play limit**: Maximum 10 consecutive auto-plays to prevent infinite loops when multiple players are disconnected.
 
@@ -61,7 +61,9 @@
 If all 4 players discard the same tile on their first turn (dealer discards first, then all 3 non-dealers match):
 - Dealer pays 5 points to each non-dealer (total -15).
 - Non-dealers each receive 5 points.
-- This is a penalty for the dealer having an unlucky start.
+- Apply immediately and at most once per round, including if the same discard ends in a draw.
+- Only each player's first discard counts, using actionLog (claimed tiles disappear from discardPool). Later discards do not count.
+- Draw clears pending gang records only; it never reverses this penalty.
 
 ### 掷骰子定庄 (Dice Roll for Dealer)
 - All 4 players roll dice (1-6).

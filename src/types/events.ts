@@ -17,6 +17,7 @@ export interface ClientGameState {
   dealerIndex: number;
   turnCount: number;
   roundNumber: number;
+  roundStartScores?: Record<string, number>;
   wallCount: number;
   myHand: GameState['players'][number]['hand'];
   players: Array<{
@@ -34,6 +35,14 @@ export interface ClientGameState {
   autoPlayPlayerIds: string[];
   pendingResponsePlayerIds: string[];
   passedPlayerIds: string[];
+}
+
+/** 服务端已结算的每局历史（用于重连补齐及解散时同步）。 */
+export interface ScoreHistoryEntry {
+  round: number;
+  result: 'win' | 'draw';
+  winnerId?: string;
+  scores: Array<{ playerId: string; seat: string; delta: number; total: number }>;
 }
 
 /** 客户端 → 服务端事件 */
@@ -103,6 +112,7 @@ export interface ServerEvents {
   'game:resumed': () => void;
   'room:vote-dissolve-request': (initiator: string) => void;
   'room:vote-dissolve-rejected': () => void;
-  'room:dissolved': (data?: { roomId: string; scoreHistory?: Array<{ round: number; result: string; scores: Array<{ seat: string; delta: number }> }> }) => void;
+  'room:dissolved': (data?: { roomId: string; scoreHistory?: ScoreHistoryEntry[] }) => void;
+  'game:score-history': (data: { roomId: string; scoreHistory: ScoreHistoryEntry[] }) => void;
   'room:new-game-created': (roomId: string) => void;
 }

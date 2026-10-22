@@ -55,6 +55,8 @@ export interface GameState {
   lastDiscard: { tile: Tile; playerIndex: number } | null;
   turnCount: number;
   roundNumber: number;            // 当前局数（第几局）
+  /** 本局开始前累计分，按玩家 ID 持久化；旧存档可缺失。 */
+  roundStartScores?: Record<string, number>;
   consecutiveGangCount: number; // 当前回合连续杠次数，下一位玩家回合开始或当前玩家出牌完成时重置为 0
   gangRecords: GangRecord[];   // 累计杠分记录，仅在胡牌时结算，流局时原子清零
   isPaused: boolean;

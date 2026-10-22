@@ -36,7 +36,7 @@ export async function recoverActiveGames(
         isReady: p.isReady,
       })),
       dealerIndex: state.dealerIndex,
-      status: state.phase === 'WIN' || state.phase === 'DRAW' ? 'finished' : 'playing',
+      status: 'playing', // terminal snapshots must also allow reconnect / finalization
     });
   }
 
