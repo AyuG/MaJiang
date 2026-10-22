@@ -144,32 +144,35 @@ function handleDiscard(state: GameState, tileId: number): GameState {
     actionLog: appendLog(state.actionLog, pi, 'discard', tileId),
   };
 
-  // ── Dealer first discard: four-same penalty tracking ──
-  // If dealer just discarded their first tile, record it
-  let dealerFirstDiscard = newState.dealerFirstDiscard ?? state.dealerFirstDiscard;
-  let dealerFirstMatchCount = newState.dealerFirstMatchCount ?? state.dealerFirstMatchCount;
+  // Count only each player's first discard. Pools cannot identify first discards:
+  // a claimed tile is removed from its owner's pool, but remains in the action log.
+  const previousDiscards = state.actionLog.filter((entry) => entry.action === 'discard');
+  const isFirstDiscard = !previousDiscards.some((entry) => entry.playerIndex === pi);
+  let dealerFirstDiscard = state.dealerFirstDiscard;
+  let dealerFirstMatchCount = state.dealerFirstMatchCount;
 
-  if (pi === state.dealerIndex && state.dealerFirstDiscard === null && state.turnCount <= 1) {
-    // Dealer's first discard this round
+  if (pi === state.dealerIndex && isFirstDiscard && previousDiscards.length === 0) {
     dealerFirstDiscard = { suit: discarded.suit, value: discarded.value };
     dealerFirstMatchCount = 0;
-  } else if (dealerFirstDiscard !== null && pi !== state.dealerIndex) {
-    // Non-dealer discarding — check if it matches dealer's first discard
+  } else if (dealerFirstDiscard !== null && pi !== state.dealerIndex && isFirstDiscard) {
     if (discarded.suit === dealerFirstDiscard.suit && discarded.value === dealerFirstDiscard.value) {
-      dealerFirstMatchCount++;
-      // If all 3 non-dealers matched, apply penalty: dealer pays 5 to each
-      if (dealerFirstMatchCount >= 3) {
+      // Derive the count from distinct first discards, including restored snapshots.
+      const firstDiscards = new Map<number, ActionLogEntry>();
+      for (const entry of newState.actionLog) {
+        if (entry.action === 'discard' && !firstDiscards.has(entry.playerIndex)) {
+          firstDiscards.set(entry.playerIndex, entry);
+        }
+      }
+      dealerFirstMatchCount = firstDiscards.size - 1;
+      if (dealerFirstMatchCount === 3) {
         players[state.dealerIndex].score -= 15;
         for (let i = 0; i < 4; i++) {
-          if (i !== state.dealerIndex) {
-            players[i].score += 5;
-          }
+          if (i !== state.dealerIndex) players[i].score += 5;
         }
-        dealerFirstDiscard = null; // settled, clear tracking
+        dealerFirstDiscard = null;
         dealerFirstMatchCount = 0;
       }
     } else {
-      // Mismatch — cancel tracking
       dealerFirstDiscard = null;
       dealerFirstMatchCount = 0;
     }

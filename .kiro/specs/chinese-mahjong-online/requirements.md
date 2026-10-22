@@ -28,7 +28,7 @@
 - **Seed**: 随机种子，用于洗牌算法的确定性随机数生成，支持复盘
 - **Redis_Store**: Redis 持久化层，存储游戏房间状态、玩家手牌和桌面信息
 - **Client_UI**: 基于 React 的 2.5D 牌桌界面，使用 PNG 牌面素材（riichi-mahjong-tiles, CC0）和音效（mahjong-master, MIT）
-- **Score**: 分数，杠分和胡牌分的统计值，固定每次 5 分。杠分在游戏过程中累计记录，仅在胡牌时统一结算；流局时杠分清零不计算
+- **Score**: 分数，杠分、胡牌分及已生效首牌罚分的累计统计值，固定每次 5 分。杠分在游戏过程中累计记录，仅在胡牌时统一结算；流局时杠分清零不计算
 - **Qi_Dui**: 七对子，手牌由 7 组对子（每组 2 张相同牌）组成的合法胡牌牌型，不翻倍，按固定分值计算
 - **Vote_Dissolve**: 投票解散机制，发起方自动同意，其余在线玩家全部同意方可解散当前游戏，断线玩家默认同意
 - **Turn_Timer**: 回合计时器，限制玩家每回合的操作时间
@@ -150,8 +150,10 @@
 2. WHEN Player 执行 An_Gang 操作时，THE Mahjong_Engine SHALL 记录该杠分：其他三位 Player 各欠 5 分（共 15 分）给执行杠操作的 Player
 3. WHEN Player 执行 Bu_Gang 操作时，THE Mahjong_Engine SHALL 按照 Ming_Gang 的规则记录杠分（被杠者欠 5 分）
 4. WHEN Player 完成 Zi_Mo 胡牌时，THE Mahjong_Engine SHALL 统一结算本局所有累计杠分，并从其他三位 Player 各扣除 5 分（共 15 分）加给胡牌的 Player
-5. WHEN 游戏进入 DRAW 阶段（流局）时，THE Mahjong_Engine SHALL 清零本局所有累计杠分，不进行任何分数变动
+5. WHEN 游戏进入 DRAW 阶段（流局）时，THE Mahjong_Engine SHALL 仅清除本局尚未结算的杠分记录；不得撤销已生效的首牌罚分，流局每局净积分可以非零
 6. THE Mahjong_Engine SHALL 在游戏过程中维护每位 Player 的累计杠分记录，仅在胡牌结算时转化为实际 Score 变动
+7. WHEN 四位 Player 的本局首张弃牌均与庄家首张弃牌同花色同点数时，THE Mahjong_Engine SHALL 立即扣除庄家 15 分，给其他三家各加 5 分，每局仅触发一次；后续弃牌不参与匹配，碰杠导致弃牌从牌池移除也不改变首张弃牌认定
+8. THE Mahjong_Engine SHALL 在胡牌或流局时均保留已生效的首牌罚分；即使触发罚分的弃牌同时导致流局，也应保留该分数变动
 
 ### 需求 10：房间管理
 
@@ -269,9 +271,14 @@
 2. WHEN 自动开局时存在断线未重连的 Player 时，THE Game_Server SHALL 取消自动开局，将所有在线 Player 返回大厅
 3. WHEN 一局游戏结束时，THE Game_Server SHALL 将本局分数变动记录写入 Redis Score_Log，按房间分类存储
 4. THE Score_Log SHALL 记录每局的局数编号、时间戳、结果类型（胡牌/流局）、胜者 ID、每位 Player 的分数变动和累计分数
-5. THE Score_Log SHALL 保留 7 天，过期自动清理
-6. THE Client_UI SHALL 在游戏界面左下角显示积分变动日志面板，实时记录每局的分数变动
-7. WHEN Player 返回大厅时，THE Client_UI SHALL 保留并显示之前游戏的积分变动历史记录
+5. THE Game_Server SHALL 持久化每局开始前的累计分；每位玩家 delta = 本局结束累计分 - 本局开始前累计分，total = 本局结束累计分。首局基线为零，后续局继承上一局累计分；断线恢复不重置基线，重新开局使用新房间
+6. THE Score_Log SHALL 使用持久化局号，同一房间同一局只记录一次；旧存档可从上一局 total 恢复基线，缺少可靠基线时拒绝猜测分差。胜者由 WIN 状态的 currentPlayerIndex 确定，不按累计分排名
+7. THE Score_Log SHALL 保留 7 天，过期自动清理
+8. THE Client_UI SHALL 在游戏界面左下角显示积分变动日志面板，实时记录每局的分数变动
+9. WHEN Player 返回大厅时，THE Client_UI SHALL 保留并显示之前游戏的积分变动历史记录
+
+10. THE Game_Server SHALL 原子提交终局快照与 Score_Log，避免进程中断产生半个终局；初始快照与房间恢复登记亦应原子提交
+11. THE Game_Server SHALL 顺序处理同房间状态修改，防止断线/重连覆盖已生效积分；重启后真实重连前不将旧连接状态视为在线，过期局号/回合的超时不得推进局面
 
 ### 需求 19：抓牌视觉提醒
 

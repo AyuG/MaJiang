@@ -76,7 +76,8 @@ export function settleWin(
 }
 
 /**
- * Settle a draw (流局): clear all gang records, no score changes.
+ * Settle a draw (流局): discard pending gang records only.
+ * Already-applied first-discard penalties remain in players.score.
  * Returns a new empty gang records array instead of mutating the input.
  * Returns empty score changes and a fresh empty gang-record list.
  */

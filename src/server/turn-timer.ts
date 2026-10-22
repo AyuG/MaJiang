@@ -1,4 +1,4 @@
-import type { GamePhase } from '@/types';
+import type { GamePhase, GameState } from '@/types';
 
 interface TimerEntry {
   timeout: ReturnType<typeof setTimeout>;
@@ -9,6 +9,7 @@ interface TimerEntry {
   startedAt: number;
   remainingMs: number;
   suspended: boolean;
+  expected?: Pick<GameState, 'roundNumber' | 'turnCount'>;
 }
 
 /**
@@ -19,19 +20,19 @@ export class TurnTimer {
   private timers = new Map<string, TimerEntry>();
 
   constructor(
-    private onTimeout: (roomId: string, playerId: string, phase: GamePhase) => void,
+    private onTimeout: (roomId: string, playerId: string, phase: GamePhase, expected?: Pick<GameState, 'roundNumber' | 'turnCount'>) => void,
   ) {}
 
   /** Start a TURN phase timer (default 30s). */
-  startTurnTimer(roomId: string, playerId: string, durationMs = 30_000): void {
+  startTurnTimer(roomId: string, playerId: string, durationMs = 30_000, expected?: Pick<GameState, 'roundNumber' | 'turnCount'>): void {
     this.clearRoom(roomId);
-    this.startTimer(roomId, playerId, 'TURN', durationMs);
+    this.startTimer(roomId, playerId, 'TURN', durationMs, expected);
   }
 
   /** Start an AWAITING phase timer (default 15s). */
-  startAwaitingTimer(roomId: string, playerId: string, durationMs = 15_000): void {
+  startAwaitingTimer(roomId: string, playerId: string, durationMs = 15_000, expected?: Pick<GameState, 'roundNumber' | 'turnCount'>): void {
     this.clearRoom(roomId);
-    this.startTimer(roomId, playerId, 'AWAITING', durationMs);
+    this.startTimer(roomId, playerId, 'AWAITING', durationMs, expected);
   }
 
   /** Suspend (pause) all timers for a room — used on disconnect. */
@@ -56,7 +57,7 @@ export class TurnTimer {
 
     entry.timeout = setTimeout(() => {
       this.timers.delete(roomId);
-      this.onTimeout(entry.roomId, entry.playerId, entry.phase);
+      this.onTimeout(entry.roomId, entry.playerId, entry.phase, entry.expected);
     }, entry.remainingMs);
   }
 
@@ -74,10 +75,11 @@ export class TurnTimer {
     return Math.max(0, entry.durationMs - elapsed);
   }
 
-  private startTimer(roomId: string, playerId: string, phase: GamePhase, durationMs: number): void {
+  private startTimer(roomId: string, playerId: string, phase: GamePhase, durationMs: number, expected?: Pick<GameState, 'roundNumber' | 'turnCount'>): void {
+    const identity = expected ? { roundNumber: expected.roundNumber, turnCount: expected.turnCount } : undefined;
     const timeout = setTimeout(() => {
       this.timers.delete(roomId);
-      this.onTimeout(roomId, playerId, phase);
+      this.onTimeout(roomId, playerId, phase, identity);
     }, durationMs);
 
     this.timers.set(roomId, {
@@ -89,6 +91,7 @@ export class TurnTimer {
       startedAt: Date.now(),
       remainingMs: durationMs,
       suspended: false,
+      expected: identity,
     });
   }
 

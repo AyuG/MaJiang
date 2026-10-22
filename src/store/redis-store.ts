@@ -16,6 +16,14 @@ function logKey(roomId: string, timestamp: number): string {
   return `log:${roomId}:${timestamp}`;
 }
 
+export interface ScoreRecord {
+  round: number;
+  timestamp: number;
+  result: 'win' | 'draw';
+  winnerId?: string;
+  scores: Array<{ playerId: string; delta: number; total: number }>;
+}
+
 export class RedisStore {
   private client: Redis;
 
@@ -34,6 +42,17 @@ export class RedisStore {
 
   async saveGameState(roomId: string, state: GameState): Promise<void> {
     await this.client.set(gameKey(roomId), JSON.stringify(state));
+  }
+
+  /** Initial/next-round snapshot and recovery registration must survive together. */
+  async saveStartedGameState(roomId: string, state: GameState, room: RoomInfo): Promise<void> {
+    await this.client.eval(`
+      redis.call('HSET', KEYS[2], 'roomId', ARGV[2], 'players', ARGV[3], 'status', ARGV[4], 'createdAt', ARGV[5])
+      redis.call('SADD', KEYS[3], ARGV[2])
+      redis.call('SET', KEYS[1], ARGV[1])
+      return 1
+    `, 3, gameKey(roomId), roomKey(roomId), ACTIVE_ROOMS_KEY,
+    JSON.stringify(state), roomId, JSON.stringify(room.players), room.status, String(room.createdAt));
   }
 
   async getGameState(roomId: string): Promise<GameState | null> {
@@ -116,25 +135,54 @@ export class RedisStore {
     return this.client.smembers(ACTIVE_ROOMS_KEY);
   }
 
+  /** Stop recovering a dissolved room while retaining its score history. */
+  async deactivateRoom(roomId: string): Promise<void> {
+    await this.client.srem(ACTIVE_ROOMS_KEY, roomId);
+  }
+
   // ── Score Log (per room) ───────────────────────────────
 
   /**
    * Append a score record for a completed round in a room.
    * Stored as a Redis list keyed by room, each entry is a JSON object.
    */
-  async appendScoreLog(
-    roomId: string,
-    record: {
-      round: number;
-      timestamp: number;
-      result: 'win' | 'draw';
-      winnerId?: string;
-      scores: Array<{ playerId: string; delta: number; total: number }>;
-    },
-  ): Promise<void> {
+  async appendScoreLog(roomId: string, record: ScoreRecord): Promise<void> {
+    await this.commitScore(roomId, record);
+  }
+
+  /** Commit terminal snapshot and score log in the same Redis operation. */
+  async saveCompletedGameState(roomId: string, state: GameState, record: ScoreRecord): Promise<void> {
+    await this.commitScore(roomId, record, state);
+  }
+
+  private async commitScore(roomId: string, record: ScoreRecord, state?: GameState): Promise<void> {
     const key = `score:${roomId}`;
-    await this.client.rpush(key, JSON.stringify(record));
-    await this.client.expire(key, LOG_TTL_SECONDS);
+    for (;;) {
+      const raw = await this.client.lrange(key, 0, -1);
+      const existing = raw.map((entry) => JSON.parse(entry) as ScoreRecord)
+        .find((entry) => entry.round === record.round);
+      if (existing && (existing.result !== record.result || existing.winnerId !== record.winnerId ||
+          JSON.stringify(existing.scores) !== JSON.stringify(record.scores))) {
+        throw new Error('Conflicting score record');
+      }
+      if (existing && !state) return;
+      // No snapshot is changed until duplicate/conflict validation succeeds. The
+      // tail check guards simultaneous appends and expiration between read/write.
+      const committed = await this.client.eval(`
+        if redis.call('LLEN', KEYS[1]) ~= tonumber(ARGV[1]) or
+            (redis.call('LINDEX', KEYS[1], -1) or '') ~= ARGV[2] then
+          return 0
+        end
+        if ARGV[5] == '1' then
+          redis.call('RPUSH', KEYS[1], ARGV[3])
+          redis.call('EXPIRE', KEYS[1], ARGV[4])
+        end
+        if ARGV[6] ~= '' then redis.call('SET', KEYS[2], ARGV[6]) end
+        return 1
+      `, 2, key, gameKey(roomId), raw.length, raw.at(-1) ?? '', JSON.stringify(record),
+      LOG_TTL_SECONDS, existing ? '0' : '1', state ? JSON.stringify(state) : '');
+      if (committed === 1) return;
+    }
   }
 
   /**

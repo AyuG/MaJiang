@@ -1,7 +1,7 @@
 import type { GameState, GameAction, GamePhase } from '@/types';
 import type { MockWallConfig } from '@/engine/mock-wall';
 import type { RoomManager } from '@/server/room-manager';
-import type { RedisStore } from '@/store/redis-store';
+import type { RedisStore, ScoreRecord } from '@/store/redis-store';
 import { createTileSet, shuffle } from '@/engine/tile-set';
 import { applyMockWall } from '@/engine/mock-wall';
 import { transition, getValidActionsForPlayer } from '@/engine/state-machine';
@@ -12,6 +12,20 @@ import { logger } from '@/server/logger';
  * engine's pure state-machine, and persists every transition to Redis.
  */
 export class GameController {
+  // All mutations for a room share one queue: a late connection snapshot must
+  // never overwrite a discard/penalty, hu, or the beginning of the next round.
+  private operations = new Map<string, Promise<unknown>>();
+
+  private async inRoom<T>(roomId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.operations.get(roomId) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(operation);
+    this.operations.set(roomId, current);
+    try {
+      return await current;
+    } finally {
+      if (this.operations.get(roomId) === current) this.operations.delete(roomId);
+    }
+  }
   constructor(
     private roomManager: RoomManager,
     private redisStore: RedisStore,
@@ -23,54 +37,73 @@ export class GameController {
    * Creates initial GameState, deals tiles, saves to Redis.
    */
   async startGame(roomId: string): Promise<GameState> {
+    return this.inRoom(roomId, () => this.startGameInRoom(roomId));
+  }
+
+  private async startGameInRoom(roomId: string): Promise<GameState> {
     const room = this.roomManager.getRoom(roomId);
     if (!room) throw new Error(`Room ${roomId} not found`);
     if (room.players.length !== 4) throw new Error('Need exactly 4 players to start');
 
-    // Mark room as playing
-    room.status = 'playing';
+    if (await this.redisStore.getGameState(roomId)) {
+      throw new Error('Game already exists; use a new room to restart');
+    }
+    return this.startGameWithScores(roomId, new Map(), 1);
+  }
 
-    const seed = Date.now();
-    const tiles = createTileSet();
-    let wall = shuffle(tiles, seed);
-    wall = applyMockWall(wall, this.mockWallConfig ?? null);
+  /** Restore the baseline for pre-upgrade snapshots without guessing a later round. */
+  private async withRoundStartScores(state: GameState): Promise<GameState> {
+    if (state.roundStartScores) return state;
+    const previous = (await this.redisStore.getScoreLog(state.roomId))
+      .filter((entry) => entry.round === state.roundNumber - 1).at(-1);
+    const roundStartScores: Record<string, number> = {};
+    for (const player of state.players) {
+      const score = state.roundNumber === 1 ? 0
+        : previous?.scores.find((entry) => entry.playerId === player.id)?.total;
+      if (score === undefined) throw new Error('Missing round-start scores; cannot record reliable delta');
+      roundStartScores[player.id] = score;
+    }
+    return { ...state, roundStartScores };
+  }
 
-    const initialState: GameState = {
-      phase: 'DEALING',
-      roomId,
-      players: room.players.map((p) => ({
-        id: p.id,
-        hand: [],
-        melds: [],
-        discardPool: [],
-        score: 0,
-        isConnected: true,
-        isReady: true,
-      })),
-      wall,
-      currentPlayerIndex: room.dealerIndex,
-      dealerIndex: room.dealerIndex,
-      seed,
-      lastDiscard: null,
-      turnCount: 0,
-      roundNumber: 1,
-      consecutiveGangCount: 0,
-      gangRecords: [],
-      isPaused: false,
-      actionLog: [],
-      lastDrawnTileId: null,
-      dealerFirstDiscard: null,
-      dealerFirstMatchCount: 0,
-      timeoutAutoPlayerIds: [],
-      consecutiveAutoPlayCount: 0,
-      pendingResponses: [],
-      passedPlayerIds: [],
+  private async loadGameState(roomId: string): Promise<GameState | null> {
+    if (!this.roomManager.getRoom(roomId)) return null;
+    const state = await this.redisStore.getGameState(roomId);
+    return state ? this.withRoundStartScores(state) : null;
+  }
+
+  /** Persist the completed round before the result display / next-round delay. */
+  async recordRoundResult(roomId: string, state: GameState): Promise<void> {
+    await this.redisStore.appendScoreLog(roomId, await this.scoreRecord(roomId, state));
+  }
+
+  private async persistState(roomId: string, state: GameState): Promise<void> {
+    if (state.phase === 'WIN' || state.phase === 'DRAW') {
+      await this.redisStore.saveCompletedGameState(roomId, state, await this.scoreRecord(roomId, state));
+    } else {
+      await this.redisStore.saveGameState(roomId, state);
+    }
+  }
+
+  private async scoreRecord(roomId: string, state: GameState): Promise<ScoreRecord> {
+    if (state.roomId !== roomId || (state.phase !== 'WIN' && state.phase !== 'DRAW')) {
+      throw new Error('Only a completed round in this room can be recorded');
+    }
+    const resolved = await this.withRoundStartScores(state);
+    const scores = resolved.players.map((p) => {
+      const baseline = resolved.roundStartScores?.[p.id];
+      if (typeof baseline !== 'number' || !Number.isFinite(baseline) || !Number.isFinite(p.score)) {
+        throw new Error('Invalid round-start scores');
+      }
+      return { playerId: p.id, delta: p.score - baseline, total: p.score };
+    });
+    return {
+      round: state.roundNumber,
+      timestamp: Date.now(),
+      result: state.phase === 'WIN' ? 'win' : 'draw',
+      winnerId: state.phase === 'WIN' ? state.players[state.currentPlayerIndex].id : undefined,
+      scores,
     };
-
-    // Deal
-    const dealtState = transition(initialState, { type: 'deal' });
-    await this.redisStore.saveGameState(roomId, dealtState);
-    return dealtState;
   }
 
   /**
@@ -82,7 +115,11 @@ export class GameController {
     playerId: string,
     action: GameAction,
   ): Promise<GameState> {
-    const state = await this.redisStore.getGameState(roomId);
+    return this.inRoom(roomId, () => this.applyPlayerAction(roomId, playerId, action));
+  }
+
+  private async applyPlayerAction(roomId: string, playerId: string, action: GameAction): Promise<GameState> {
+    const state = await this.loadGameState(roomId);
     if (!state) throw new Error(`No game state for room ${roomId}`);
 
     // Validate the action is legal
@@ -113,7 +150,7 @@ export class GameController {
       };
     }
 
-    await this.redisStore.saveGameState(roomId, newState);
+    await this.persistState(roomId, newState);
     return newState;
   }
 
@@ -129,12 +166,19 @@ export class GameController {
     roomId: string,
     playerId: string,
     phase: GamePhase,
+    expected?: Pick<GameState, 'roundNumber' | 'turnCount'>,
   ): Promise<GameState> {
-    const state = await this.redisStore.getGameState(roomId);
+    return this.inRoom(roomId, () => this.applyTimeout(roomId, playerId, phase, expected));
+  }
+
+  private async applyTimeout(roomId: string, playerId: string, phase: GamePhase,
+    expected?: Pick<GameState, 'roundNumber' | 'turnCount'>): Promise<GameState> {
+    const state = await this.loadGameState(roomId);
     if (!state) throw new Error(`No game state for room ${roomId}`);
 
     // If state phase no longer matches, this timeout is stale — return current state
-    if (state.phase !== phase) {
+    if (state.phase !== phase || (expected &&
+        (expected.roundNumber !== state.roundNumber || expected.turnCount !== state.turnCount))) {
       return state;
     }
 
@@ -146,7 +190,8 @@ export class GameController {
 
       // Log for debugging: verify the timeout player matches current player
       if (playerId && player.id !== playerId) {
-        logger.warn('handleTimeout', `Timeout player ${playerId} does not match current player ${player.id}`);
+        logger.warn('handleTimeout', `Ignoring stale timeout for ${playerId}; current player is ${player.id}`);
+        return state;
       }
 
       // Increment consecutive auto-play count
@@ -198,7 +243,7 @@ export class GameController {
       }
     }
 
-    await this.redisStore.saveGameState(roomId, newState);
+    await this.persistState(roomId, newState);
     return newState;
   }
 
@@ -207,7 +252,11 @@ export class GameController {
    * Game continues with smart auto-play for disconnected players.
    */
   async handleDisconnect(roomId: string, playerId: string): Promise<GameState> {
-    const state = await this.redisStore.getGameState(roomId);
+    return this.inRoom(roomId, () => this.applyDisconnect(roomId, playerId));
+  }
+
+  private async applyDisconnect(roomId: string, playerId: string): Promise<GameState> {
+    const state = await this.loadGameState(roomId);
     if (!state) throw new Error(`No game state for room ${roomId}`);
 
     const newState: GameState = {
@@ -217,7 +266,7 @@ export class GameController {
       ),
     };
 
-    await this.redisStore.saveGameState(roomId, newState);
+    await this.persistState(roomId, newState);
     return newState;
   }
 
@@ -225,24 +274,52 @@ export class GameController {
    * Handle player reconnect — set isConnected=true,
    * set isPaused=false if all players are connected.
    */
-  async handleReconnect(roomId: string, playerId: string): Promise<GameState> {
-    const state = await this.redisStore.getGameState(roomId);
+  async handleReconnect(roomId: string, playerId: string, replacementId?: string): Promise<GameState> {
+    return this.inRoom(roomId, () => this.applyReconnect(roomId, playerId, replacementId));
+  }
+
+  private async applyReconnect(roomId: string, playerId: string, replacementId?: string): Promise<GameState> {
+    const state = await this.loadGameState(roomId);
     if (!state) throw new Error(`No game state for room ${roomId}`);
 
-    const players = state.players.map((p) =>
-      p.id === playerId ? { ...p, isConnected: true } : { ...p },
-    );
-
-    const allConnected = players.every((p) => p.isConnected);
-
+    if (replacementId) {
+      if (state.phase === 'WIN' || state.phase === 'DRAW') throw new Error('Cannot replace a player in a completed round');
+      if (!state.players.some((p) => p.id === playerId && !p.isConnected) ||
+          state.players.some((p) => p.id === replacementId)) throw new Error('Seat is no longer available');
+    }
+    const connectedId = replacementId ?? playerId;
+    const players = state.players.map((p) => ({
+      ...p,
+      ...(p.id === playerId ? { id: connectedId, isConnected: true } : {}),
+      melds: p.melds.map((meld) => replacementId && meld.fromPlayer === playerId
+        ? { ...meld, fromPlayer: replacementId } : meld),
+    }));
+    const roundStartScores = { ...state.roundStartScores };
+    if (replacementId) {
+      roundStartScores[replacementId] = roundStartScores[playerId];
+      delete roundStartScores[playerId];
+    }
     const newState: GameState = {
-      ...state,
-      players,
-      isPaused: !allConnected,
+      ...state, players, roundStartScores,
+      isPaused: !players.every((p) => p.isConnected),
+      timeoutAutoPlayerIds: (state.timeoutAutoPlayerIds ?? []).filter((id) => id !== playerId),
+      passedPlayerIds: (state.passedPlayerIds ?? []).map((id) => id === playerId ? connectedId : id),
     };
-
-    await this.redisStore.saveGameState(roomId, newState);
+    await this.persistState(roomId, newState);
+    if (replacementId) this.roomManager.replacePlayer(roomId, playerId, replacementId);
+    else this.roomManager.setPlayerConnected(roomId, playerId);
     return newState;
+  }
+
+  /** Finish any pending terminal history before removing recovery registration. */
+  async closeRoom(roomId: string): Promise<void> {
+    return this.inRoom(roomId, async () => {
+      const state = await this.redisStore.getGameState(roomId);
+      if (state?.phase === 'WIN' || state?.phase === 'DRAW') await this.recordRoundResult(roomId, state);
+      await this.redisStore.deactivateRoom(roomId);
+      const room = this.roomManager.getRoom(roomId);
+      if (room) this.roomManager.dissolveRoom(roomId, room.ownerId);
+    });
   }
 
   /**
@@ -255,29 +332,25 @@ export class GameController {
     state: GameState,
     roundNumber: number,
   ): Promise<{ canContinue: boolean; newState?: GameState }> {
-    // Determine winner
-    const isWin = state.phase === 'WIN';
-    let winnerId: string | undefined;
-    let winnerIndex: number | null = null;
+    return this.inRoom(roomId, () => this.finishRound(roomId, state, roundNumber));
+  }
 
-    if (isWin) {
-      // The winner is the current player who declared hu
-      winnerIndex = state.currentPlayerIndex;
-      winnerId = state.players[winnerIndex]?.id;
+  private async finishRound(
+    roomId: string,
+    state: GameState,
+    roundNumber: number,
+  ): Promise<{ canContinue: boolean; newState?: GameState }> {
+    if (roundNumber !== state.roundNumber) throw new Error('Round number mismatch');
+    await this.recordRoundResult(roomId, state);
+    if (!this.roomManager.getRoom(roomId)) return { canContinue: false };
+    const persisted = await this.loadGameState(roomId);
+    if (persisted && persisted.roundNumber > state.roundNumber) {
+      return { canContinue: true, newState: persisted };
     }
-
-    // Log score to Redis
-    await this.redisStore.appendScoreLog(roomId, {
-      round: roundNumber,
-      timestamp: Date.now(),
-      result: isWin ? 'win' : 'draw',
-      winnerId,
-      scores: state.players.map((p) => ({
-        playerId: p.id,
-        delta: p.score,
-        total: p.score, // cumulative will be tracked across rounds by the log
-      })),
-    });
+    // Connection flags may have changed during the five-second result display.
+    if (persisted?.roundNumber === state.roundNumber &&
+        (persisted.phase === 'WIN' || persisted.phase === 'DRAW')) state = persisted;
+    const winnerIndex = state.phase === 'WIN' ? state.currentPlayerIndex : null;
 
     // Check if all players are connected
     const allConnected = state.players.every((p) => p.isConnected);
@@ -285,14 +358,13 @@ export class GameController {
       return { canContinue: false };
     }
 
-    // Update dealer for next round
-    this.roomManager.setNextDealer(roomId, winnerIndex);
-
     // Start new round — preserve cumulative scores
     const room = this.roomManager.getRoom(roomId);
     if (!room || room.players.length !== 4) {
       return { canContinue: false };
     }
+
+    this.roomManager.setNextDealer(roomId, winnerIndex);
 
     const prevScores = new Map<string, number>();
     for (const p of state.players) {
@@ -314,8 +386,6 @@ export class GameController {
     const room = this.roomManager.getRoom(roomId);
     if (!room) throw new Error(`Room ${roomId} not found`);
     if (room.players.length !== 4) throw new Error('Need exactly 4 players');
-
-    room.status = 'playing';
 
     const seed = Date.now();
     const tiles = createTileSet();
@@ -341,6 +411,7 @@ export class GameController {
       lastDiscard: null,
       turnCount: 0,
       roundNumber,
+      roundStartScores: Object.fromEntries(room.players.map((p) => [p.id, prevScores.get(p.id) ?? 0])),
       consecutiveGangCount: 0,
       gangRecords: [],
       isPaused: false,
@@ -355,7 +426,10 @@ export class GameController {
     };
 
     const dealtState = transition(initialState, { type: 'deal' });
-    await this.redisStore.saveGameState(roomId, dealtState);
+    await this.redisStore.saveStartedGameState(roomId, dealtState, {
+      roomId, players: room.players.map((p) => p.id), status: 'playing', createdAt: room.createdAt,
+    });
+    room.status = 'playing';
     return dealtState;
   }
 }

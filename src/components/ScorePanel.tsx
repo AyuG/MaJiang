@@ -29,10 +29,10 @@ export function ScorePanel({ scoreLog, nicknames, modal, onClose, onClear }: Sco
             <tr style={{ borderBottom: '1px solid #374151' }}>
               <th style={th}>房间号</th>
               <th style={th}>局数</th>
-              <th style={th}>东-积分</th>
-              <th style={th}>南-积分</th>
-              <th style={th}>西-积分</th>
-              <th style={th}>北-积分</th>
+              <th style={th}>东-本局分差</th>
+              <th style={th}>南-本局分差</th>
+              <th style={th}>西-本局分差</th>
+              <th style={th}>北-本局分差</th>
               <th style={th}>状态</th>
             </tr>
           </thead>

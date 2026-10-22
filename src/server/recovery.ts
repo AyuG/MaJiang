@@ -19,24 +19,32 @@ export async function recoverActiveGames(
     const state = await redisStore.getGameState(roomId);
     if (!state) continue;
 
-    recovered.push(state);
-
     // Rebuild room in RoomManager from the persisted GameState
     // Create room with the first player, then join the rest
     const players = state.players;
     if (players.length === 0) continue;
 
-    // Only rebuild if the room doesn't already exist in memory
-    if (roomManager.getRoom(roomId)) continue;
+    // Only rebuild if the room doesn't already exist in memory.
+    if (roomManager.getRoom(roomId)) {
+      recovered.push(state);
+      continue;
+    }
 
+    // A process restart invalidates every socket, regardless of saved flags.
+    // Preserve the score/baseline but require actual reconnects before continuing.
+    const offlineState: GameState = { ...state,
+      players: state.players.map((p) => ({ ...p, isConnected: false })),
+    };
+    await redisStore.saveGameState(roomId, offlineState);
+    recovered.push(offlineState);
     roomManager.restoreRoom(roomId, {
-      players: players.map((p) => ({
+      players: offlineState.players.map((p) => ({
         id: p.id,
         isConnected: p.isConnected,
         isReady: p.isReady,
       })),
       dealerIndex: state.dealerIndex,
-      status: state.phase === 'WIN' || state.phase === 'DRAW' ? 'finished' : 'playing',
+      status: 'playing', // terminal snapshots must also allow reconnect / finalization
     });
   }
 

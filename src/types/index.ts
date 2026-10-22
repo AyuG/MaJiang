@@ -23,6 +23,7 @@ export type {
 
 export type {
   ClientGameState,
+  ScoreHistoryEntry,
   DiceResultData,
   ClientEvents,
   ServerEvents,
